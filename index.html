@@ -4,122 +4,189 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Учёт доходов TheGame</title>
-  <!-- Tailwind CSS CDN -->
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Lucide Icons CDN -->
+  <!-- Lucide Icons -->
   <script type="module">
     import * as lucide from 'https://cdn.jsdelivr.net/npm/lucide@0.268.0/dist/esm/lucide.js';
     window.lucide = lucide;
   </script>
 </head>
 <body class="bg-slate-900 text-white">
-  <div id="root"></div>
 
-  <!-- React и ReactDOM CDN -->
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <!-- Babel для JSX -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<div id="root"></div>
 
-  <!-- Ваш React-компонент -->
-  <script type="text/babel">
-    const { useState, useEffect } = React;
-    const { Download, Plus, Trash2, BarChart3, Calendar, TrendingUp } = window.lucide;
+<!-- React и ReactDOM -->
+<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+<!-- Babel для JSX -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    function FinanceTracker() {
-      const [activeTab, setActiveTab] = useState('monthly');
-      const [monthlyData, setMonthlyData] = useState([
-        { id: 1, date: '2025-11-25', location: 'Черкизовская', type: 'Долголетие', direction: 'Стандарт', teacher: 'Я', people: 35, income: 9800, expense: 0, note: 'Моя группа' },
-      ]);
-      const [newEntry, setNewEntry] = useState({
-        date: new Date().toISOString().split('T')[0],
-        location: 'Черкизовская',
-        type: 'Долголетие',
-        direction: '',
-        teacher: 'Я',
-        people: 0,
-        income: 0,
-        expense: 0,
-        note: ''
-      });
+<script type="text/babel">
 
-      useEffect(() => {
-        localStorage.setItem('monthlyData', JSON.stringify(monthlyData));
-      }, [monthlyData]);
+const { useState, useEffect } = React;
+const { Download, Plus, Trash2, BarChart3, Calendar, TrendingUp } = window.lucide;
 
-      const addEntry = () => {
-        setMonthlyData([...monthlyData, {...newEntry, id: Date.now(), income: Number(newEntry.income), expense: Number(newEntry.expense), people: Number(newEntry.people)}]);
-        setNewEntry({
-          date: new Date().toISOString().split('T')[0],
-          location: 'Черкизовская',
-          type: 'Долголетие',
-          direction: '',
-          teacher: 'Я',
-          people: 0,
-          income: 0,
-          expense: 0,
-          note: ''
-        });
-      };
+function FinanceTracker() {
+  const [activeTab, setActiveTab] = useState('monthly');
 
-      const deleteEntry = (id) => setMonthlyData(monthlyData.filter(item => item.id !== id));
+  const [monthlyData, setMonthlyData] = useState(() => {
+    const saved = localStorage.getItem('monthlyData');
+    return saved ? JSON.parse(saved) : [];
+  });
 
-      const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num);
-      const formatDate = (dateStr) => {
-        const [year, month, day] = dateStr.split('-');
-        return ${day}.${month}.${year};
-      };
+  const [newEntry, setNewEntry] = useState({
+    date: new Date().toISOString().split('T')[0],
+    location: 'Черкизовская',
+    type: 'Долголетие',
+    direction: '',
+    teacher: 'Я',
+    people: 0,
+    income: 0,
+    expense: 0,
+    note: ''
+  });
 
-      return (
-        <div className="min-h-screen p-4 max-w-7xl mx-auto">
-          <h1 className="text-3xl font-bold mb-4">💰 Учёт доходов TheGame</h1>
+  useEffect(() => {
+    localStorage.setItem('monthlyData', JSON.stringify(monthlyData));
+  }, [monthlyData]);
 
-          <div className="bg-slate-800 p-4 rounded-lg mb-6">
-            <h2 className="font-bold mb-3">➕ Добавить запись</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <input type="date" value={newEntry.date} onChange={e => setNewEntry({...newEntry, date: e.target.value})} className="bg-slate-700 p-2 rounded"/>
-              <input type="text" placeholder="Локация" value={newEntry.location} onChange={e => setNewEntry({...newEntry, location: e.target.value})} className="bg-slate-700 p-2 rounded"/>
-              <input type="text" placeholder="Тип" value={newEntry.type} onChange={e => setNewEntry({...newEntry, type: e.target.value})} className="bg-slate-700 p-2 rounded"/>
-              <input type="number" placeholder="Доход" value={newEntry.income} onChange={e => setNewEntry({...newEntry, income: e.target.value})} className="bg-slate-700 p-2 rounded"/>
-              <button onClick={addEntry} className="bg-blue-600 hover:bg-blue-700 p-2 rounded col-span-2 md:col-span-1 flex items-center justify-center gap-2">
-                <Plus size={16}/> Добавить
-              </button>
+  const addEntry = () => {
+    const entry = {
+      id: Date.now(),
+      ...newEntry,
+      income: Number(newEntry.income),
+      expense: Number(newEntry.expense),
+      people: Number(newEntry.people)
+    };
+    setMonthlyData([...monthlyData, entry]);
+    setNewEntry({
+      date: new Date().toISOString().split('T')[0],
+      location: 'Черкизовская',
+      type: 'Долголетие',
+      direction: '',
+      teacher: 'Я',
+      people: 0,
+      income: 0,
+      expense: 0,
+      note: ''
+    });
+  };
+
+  const deleteEntry = (id) => setMonthlyData(monthlyData.filter(item => item.id !== id));
+
+  const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num);
+  const formatDate = (dateStr) => {
+    const [year, month, day] = dateStr.split('-');
+    return `${day}.${month}.${year}`;
+  };
+
+  const totalMonthlyIncome = monthlyData.reduce((sum, item) => sum + Number(item.income), 0);
+  const totalMonthlyExpense = monthlyData.reduce((sum, item) => sum + Number(item.expense), 0);
+  const totalMonthlyProfit = totalMonthlyIncome - totalMonthlyExpense;
+
+  const tabs = [
+    { id: 'monthly', name: 'Месячный отчёт', icon: Calendar },
+    { id: 'summary', name: 'Сводка', icon: BarChart3 },
+  ];
+
+  return (
+    <div className="min-h-screen p-4 max-w-7xl mx-auto">
+      <h1 className="text-3xl font-bold mb-4">💰 Учёт доходов TheGame</h1>
+
+      {/* Табы */}
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+        {tabs.map(tab => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition whitespace-nowrap ${
+                activeTab === tab.id ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              <Icon size={18} />
+              {tab.name}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
+        {activeTab === 'monthly' && (
+          <div>
+            <h2 className="text-xl font-bold mb-4">📅 Месячный отчёт</h2>
+
+            {/* Добавить запись */}
+            <div className="bg-slate-900/50 p-4 rounded-lg mb-6 border border-slate-700">
+              <h3 className="font-bold mb-3">➕ Добавить запись</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <input type="date" value={newEntry.date} onChange={e => setNewEntry({...newEntry, date: e.target.value})} className="bg-slate-800 px-3 py-2 rounded border border-slate-600 text-sm"/>
+                <input type="text" placeholder="Локация" value={newEntry.location} onChange={e => setNewEntry({...newEntry, location: e.target.value})} className="bg-slate-800 px-3 py-2 rounded border border-slate-600 text-sm"/>
+                <input type="text" placeholder="Тип" value={newEntry.type} onChange={e => setNewEntry({...newEntry, type: e.target.value})} className="bg-slate-800 px-3 py-2 rounded border border-slate-600 text-sm"/>
+                <input type="number" placeholder="Доход" value={newEntry.income || ''} onChange={e => setNewEntry({...newEntry, income: e.target.value})} className="bg-slate-800 px-3 py-2 rounded border border-slate-600 text-sm"/>
+                <button onClick={addEntry} className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded flex items-center justify-center gap-2 col-span-2 md:col-span-1"><Plus size={16}/> Добавить</button>
+              </div>
+            </div>
+
+            {/* Таблица */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    <th className="py-2 px-1 text-left">Дата</th>
+                    <th className="py-2 px-1 text-left">Локация</th>
+                    <th className="py-2 px-1 text-left">Тип</th>
+                    <th className="py-2 px-1 text-left">Доход</th>
+                    <th className="py-2 px-1"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyData.map(row => (
+                    <tr key={row.id} className="border-b border-slate-700/50">
+                      <td className="py-2 px-1">{formatDate(row.date)}</td>
+                      <td className="py-2 px-1">{row.location}</td>
+                      <td className="py-2 px-1">{row.type}</td>
+                      <td className="py-2 px-1">{formatNumber(row.income)}₽</td>
+                      <td className="py-2 px-1">
+                        <button onClick={() => deleteEntry(row.id)} className="text-red-400 hover:text-red-300"><Trash2 size={16}/></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-900/50 font-bold">
+                  <tr>
+                    <td colSpan="3" className="py-2 px-1">ИТОГО:</td>
+                    <td className="py-2 px-1">{formatNumber(totalMonthlyIncome)}₽</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
+        )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-
-Yury Lioli, [06.12.2025 16:06]
-<tr className="border-b border-slate-700">
-                  <th className="py-2 px-1 text-left">Дата</th>
-                  <th className="py-2 px-1 text-left">Локация</th>
-                  <th className="py-2 px-1 text-left">Тип</th>
-                  <th className="py-2 px-1 text-left">Доход</th>
-                  <th className="py-2 px-1"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {monthlyData.map(row => (
-                  <tr key={row.id} className="border-b border-slate-700/50">
-                    <td className="py-2 px-1">{formatDate(row.date)}</td>
-                    <td className="py-2 px-1">{row.location}</td>
-                    <td className="py-2 px-1">{row.type}</td>
-                    <td className="py-2 px-1">{formatNumber(row.income)}₽</td>
-                    <td className="py-2 px-1">
-                      <button onClick={() => deleteEntry(row.id)} className="text-red-400 hover:text-red-300"><Trash2 size={16}/></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {activeTab === 'summary' && (
+          <div>
+            <h2 className="text-xl font-bold mb-4">📊 Сводка</h2>
+            <div>Общий доход: {formatNumber(totalMonthlyIncome)}₽</div>
+            <div>Общий расход: {formatNumber(totalMonthlyExpense)}₽</div>
+            <div>Прибыль: {formatNumber(totalMonthlyProfit)}₽</div>
           </div>
-        </div>
-      );
-    }
+        )}
+      </div>
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<FinanceTracker />);
-  </script>
+      <div className="mt-8 text-center text-slate-500 text-sm">
+        <p>💡 Данные сохраняются автоматически в вашем браузере и не теряются при обновлении</p>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<FinanceTracker />);
+
+</script>
+
 </body>
 </html>
