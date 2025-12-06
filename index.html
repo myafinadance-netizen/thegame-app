@@ -37,6 +37,7 @@
                 { id: 'passive', name: 'Пассивный', icon: BarChart },
                 { id: 'individual', name: 'Индивидуалки', icon: Users },
                 { id: 'summary', name: 'Сводка', icon: BarChart },
+                { id: 'results', name: 'По месяцам', icon: Calendar },
             ];
 
             const locations = [
@@ -61,11 +62,13 @@
             const [expenses, setExpenses] = useState(() => loadData('expenses', []));
             const [passive, setPassive] = useState(() => loadData('passive', []));
             const [individual, setIndividual] = useState(() => loadData('individual', []));
+            const [monthlyResults, setMonthlyResults] = useState(() => loadData('monthlyResults', []));
 
             useEffect(() => { try { localStorage.setItem('monthlyData', JSON.stringify(monthlyData)); } catch {} }, [monthlyData]);
             useEffect(() => { try { localStorage.setItem('expenses', JSON.stringify(expenses)); } catch {} }, [expenses]);
             useEffect(() => { try { localStorage.setItem('passive', JSON.stringify(passive)); } catch {} }, [passive]);
             useEffect(() => { try { localStorage.setItem('individual', JSON.stringify(individual)); } catch {} }, [individual]);
+            useEffect(() => { try { localStorage.setItem('monthlyResults', JSON.stringify(monthlyResults)); } catch {} }, [monthlyResults]);
 
             const [formData, setFormData] = useState({});
 
@@ -87,6 +90,7 @@
                     if (type === 'expenses') setFormData({...expenses[index]});
                     if (type === 'passive') setFormData({...passive[index]});
                     if (type === 'individual') setFormData({...individual[index]});
+                    if (type === 'results') setFormData({...monthlyResults[index]});
                 } else {
                     setFormData({});
                 }
@@ -161,6 +165,24 @@
                     } else {
                         setIndividual([...individual, newData]);
                     }
+                } else if (modalType === 'results') {
+                    const newData = {
+                        month: formData.month || '',
+                        year: formData.year || '',
+                        groupIncome: parseFloat(formData.groupIncome) || 0,
+                        individualIncome: parseFloat(formData.individualIncome) || 0,
+                        passiveIncome: parseFloat(formData.passiveIncome) || 0,
+                        expenses: parseFloat(formData.expenses) || 0,
+                        profit: (parseFloat(formData.groupIncome) || 0) + (parseFloat(formData.individualIncome) || 0) + (parseFloat(formData.passiveIncome) || 0) - (parseFloat(formData.expenses) || 0),
+                        note: formData.note || ''
+                    };
+                    if (editingIndex !== null) {
+                        const updated = [...monthlyResults];
+                        updated[editingIndex] = newData;
+                        setMonthlyResults(updated);
+                    } else {
+                        setMonthlyResults([...monthlyResults, newData]);
+                    }
                 }
 
                 setShowModal(false);
@@ -174,6 +196,23 @@
                 if (type === 'expenses') setExpenses(expenses.filter((_, i) => i !== index));
                 if (type === 'passive') setPassive(passive.filter((_, i) => i !== index));
                 if (type === 'individual') setIndividual(individual.filter((_, i) => i !== index));
+                if (type === 'results') setMonthlyResults(monthlyResults.filter((_, i) => i !== index));
+            };
+
+            const exportSummaryToCSV = () => {
+                let csv = 'Сводка за месяц - TheGame\n\n';
+                csv += 'Статья,Сумма\n';
+                csv += `Месячный отчёт (групповые),${totalMonthlyIncome}₽\n`;
+                csv += `Индивидуальные занятия,${totalIndividual}₽\n`;
+                csv += `Пассивный доход,${totalPassive}₽\n`;
+                csv += `Постоянные расходы,-${totalExpenses}₽\n`;
+                csv += `ЧИСТАЯ ПРИБЫЛЬ,${totalMonthlyIncome + totalIndividual + totalPassive - totalExpenses}₽\n`;
+                
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'summary_thegame.csv';
+                link.click();
             };
 
             return (
@@ -442,7 +481,12 @@
 
                             {activeTab === 'summary' && (
                                 <div>
-                                    <h2 className="text-xl font-bold mb-4">📊 Сводка за месяц</h2>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-xl font-bold">📊 Сводка за месяц</h2>
+                                        <button onClick={exportSummaryToCSV} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 px-3 py-2 rounded text-sm">
+                                            <Download />Экспорт CSV
+                                        </button>
+                                    </div>
                                     <div className="space-y-3">
                                         <div className="flex justify-between p-3 bg-slate-900/50 rounded">
                                             <span>Месячный отчёт (групповые):</span>
@@ -465,6 +509,71 @@
                                             <span className="text-xl font-bold text-blue-400">{formatNumber(totalMonthlyIncome + totalIndividual + totalPassive - totalExpenses)}₽</span>
                                         </div>
                                     </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'results' && (
+                                <div>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-xl font-bold">📅 Результаты по месяцам</h2>
+                                        <button onClick={() => openModal('results')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm">
+                                            <Plus />Добавить месяц
+                                        </button>
+                                    </div>
+                                    {monthlyResults.length === 0 ? (
+                                        <div className="text-center py-8 text-slate-400">
+                                            Нет результатов. Нажмите "Добавить месяц" чтобы внести итоги.
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="border-b border-slate-700">
+                                                        <th className="text-left py-2 px-2">Месяц</th>
+                                                        <th className="text-right py-2 px-2">Групповые</th>
+                                                        <th className="text-right py-2 px-2">Индивид.</th>
+                                                        <th className="text-right py-2 px-2">Пассивный</th>
+                                                        <th className="text-right py-2 px-2">Расходы</th>
+                                                        <th className="text-right py-2 px-2">Прибыль</th>
+                                                        <th className="text-center py-2 px-2">Действия</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {monthlyResults.map((row, idx) => (
+                                                        <tr key={idx} className="border-b border-slate-700/50">
+                                                            <td className="py-2 px-2">{row.month} {row.year}</td>
+                                                            <td className="text-right py-2 px-2 text-green-400">{formatNumber(row.groupIncome)}₽</td>
+                                                            <td className="text-right py-2 px-2 text-green-400">{formatNumber(row.individualIncome)}₽</td>
+                                                            <td className="text-right py-2 px-2 text-green-400">{formatNumber(row.passiveIncome)}₽</td>
+                                                            <td className="text-right py-2 px-2 text-red-400">{formatNumber(row.expenses)}₽</td>
+                                                            <td className="text-right py-2 px-2 text-blue-400 font-bold">{formatNumber(row.profit)}₽</td>
+                                                            <td className="py-2 px-2">
+                                                                <div className="flex gap-2 justify-center">
+                                                                    <button onClick={() => openModal('results', idx)} className="text-blue-400">
+                                                                        <Edit />
+                                                                    </button>
+                                                                    <button onClick={() => deleteItem('results', idx)} className="text-red-400">
+                                                                        <Trash />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                                <tfoot className="bg-slate-900/50">
+                                                    <tr className="font-bold">
+                                                        <td className="py-2 px-2">ИТОГО:</td>
+                                                        <td className="text-right py-2 px-2 text-green-400">{formatNumber(monthlyResults.reduce((sum, r) => sum + r.groupIncome, 0))}₽</td>
+                                                        <td className="text-right py-2 px-2 text-green-400">{formatNumber(monthlyResults.reduce((sum, r) => sum + r.individualIncome, 0))}₽</td>
+                                                        <td className="text-right py-2 px-2 text-green-400">{formatNumber(monthlyResults.reduce((sum, r) => sum + r.passiveIncome, 0))}₽</td>
+                                                        <td className="text-right py-2 px-2 text-red-400">{formatNumber(monthlyResults.reduce((sum, r) => sum + r.expenses, 0))}₽</td>
+                                                        <td className="text-right py-2 px-2 text-blue-400">{formatNumber(monthlyResults.reduce((sum, r) => sum + r.profit, 0))}₽</td>
+                                                        <td></td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -640,6 +749,72 @@
                                                 placeholder="Ставка за час (₽)"
                                                 value={formData.rate || ''}
                                                 onChange={(e) => setFormData({...formData, rate: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Примечание (необязательно)"
+                                                value={formData.note || ''}
+                                                onChange={(e) => setFormData({...formData, note: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            />
+                                        </>
+                                    )}
+
+                                    {modalType === 'results' && (
+                                        <>
+                                            <select
+                                                value={formData.month || ''}
+                                                onChange={(e) => setFormData({...formData, month: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            >
+                                                <option value="">Выберите месяц</option>
+                                                <option value="Январь">Январь</option>
+                                                <option value="Февраль">Февраль</option>
+                                                <option value="Март">Март</option>
+                                                <option value="Апрель">Апрель</option>
+                                                <option value="Май">Май</option>
+                                                <option value="Июнь">Июнь</option>
+                                                <option value="Июль">Июль</option>
+                                                <option value="Август">Август</option>
+                                                <option value="Сентябрь">Сентябрь</option>
+                                                <option value="Октябрь">Октябрь</option>
+                                                <option value="Ноябрь">Ноябрь</option>
+                                                <option value="Декабрь">Декабрь</option>
+                                            </select>
+                                            <input
+                                                type="number"
+                                                placeholder="Год (например: 2025)"
+                                                value={formData.year || ''}
+                                                onChange={(e) => setFormData({...formData, year: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            />
+                                            <input
+                                                type="number"
+                                                placeholder="Групповые занятия (₽)"
+                                                value={formData.groupIncome || ''}
+                                                onChange={(e) => setFormData({...formData, groupIncome: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            />
+                                            <input
+                                                type="number"
+                                                placeholder="Индивидуальные (₽)"
+                                                value={formData.individualIncome || ''}
+                                                onChange={(e) => setFormData({...formData, individualIncome: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            />
+                                            <input
+                                                type="number"
+                                                placeholder="Пассивный доход (₽)"
+                                                value={formData.passiveIncome || ''}
+                                                onChange={(e) => setFormData({...formData, passiveIncome: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            />
+                                            <input
+                                                type="number"
+                                                placeholder="Расходы (₽)"
+                                                value={formData.expenses || ''}
+                                                onChange={(e) => setFormData({...formData, expenses: e.target.value})}
                                                 className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
                                             />
                                             <input
