@@ -42,6 +42,8 @@
                 { id: 'expenses', name: 'Расходы', icon: TrendingUp },
                 { id: 'passive', name: 'Пассивный', icon: BarChart },
                 { id: 'individual', name: 'Индивидуалки', icon: Users },
+                { id: 'students', name: 'База учеников', icon: Users },
+                { id: 'analytics', name: 'Аналитика', icon: BarChart },
                 { id: 'summary', name: 'Сводка', icon: BarChart },
                 { id: 'results', name: 'По месяцам', icon: Calendar },
             ];
@@ -100,6 +102,7 @@
             const [passive, setPassive] = useState([]);
             const [individual, setIndividual] = useState([]);
             const [monthlyResults, setMonthlyResults] = useState([]);
+            const [students, setStudents] = useState([]);
 
             // Загрузка данных при старте
             useEffect(() => {
@@ -109,12 +112,14 @@
                     const pass = await loadFromCloud('passive', []);
                     const indiv = await loadFromCloud('individual', []);
                     const results = await loadFromCloud('monthlyResults', []);
+                    const studs = await loadFromCloud('students', []);
                     
                     setMonthlyData(monthly);
                     setExpenses(exp);
                     setPassive(pass);
                     setIndividual(indiv);
                     setMonthlyResults(results);
+                    setStudents(studs);
                     setLoading(false);
                 };
                 loadAllData();
@@ -126,6 +131,7 @@
             useEffect(() => { if (!loading) saveToCloud('passive', passive); }, [passive]);
             useEffect(() => { if (!loading) saveToCloud('individual', individual); }, [individual]);
             useEffect(() => { if (!loading) saveToCloud('monthlyResults', monthlyResults); }, [monthlyResults]);
+            useEffect(() => { if (!loading) saveToCloud('students', students); }, [students]);
 
             const [formData, setFormData] = useState({});
 
@@ -135,6 +141,12 @@
             const totalExpenses = expenses.reduce((sum, item) => sum + (item.amount || 0), 0);
             const totalPassive = passive.reduce((sum, item) => sum + (item.monthly || 0), 0);
             const totalIndividual = individual.reduce((sum, item) => sum + (item.income || 0), 0);
+            
+            // Аналитика
+            const totalStudents = students.length;
+            const activeStudents = students.filter(s => s.status === 'Активный').length;
+            const avgIncomePerStudent = totalStudents > 0 ? Math.round((totalMonthlyIncome + totalIndividual) / totalStudents) : 0;
+            const progressToGoal = Math.round(((totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses) / 1000000) * 100);
 
             const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num);
 
@@ -156,6 +168,7 @@
                     if (type === 'passive') setFormData({...passive[index]});
                     if (type === 'individual') setFormData({...individual[index]});
                     if (type === 'results') setFormData({...monthlyResults[index]});
+                    if (type === 'students') setFormData({...students[index]});
                 } else {
                     setFormData({});
                 }
@@ -248,6 +261,23 @@
                     } else {
                         setMonthlyResults([...monthlyResults, newData]);
                     }
+                } else if (modalType === 'students') {
+                    const newData = {
+                        name: formData.name || '',
+                        phone: formData.phone || '',
+                        group: formData.group || '',
+                        subscription: formData.subscription || '',
+                        expiryDate: formData.expiryDate || '',
+                        status: formData.status || 'Активный',
+                        note: formData.note || ''
+                    };
+                    if (editingIndex !== null) {
+                        const updated = [...students];
+                        updated[editingIndex] = newData;
+                        setStudents(updated);
+                    } else {
+                        setStudents([...students, newData]);
+                    }
                 }
 
                 setShowModal(false);
@@ -262,6 +292,7 @@
                 if (type === 'passive') setPassive(passive.filter((_, i) => i !== index));
                 if (type === 'individual') setIndividual(individual.filter((_, i) => i !== index));
                 if (type === 'results') setMonthlyResults(monthlyResults.filter((_, i) => i !== index));
+                if (type === 'students') setStudents(students.filter((_, i) => i !== index));
             };
 
             const exportSummaryToCSV = () => {
@@ -287,6 +318,23 @@
                         <div className="mb-6">
                             <h1 className="text-3xl font-bold mb-2">💰 Учёт доходов TheGame</h1>
                             <p className="text-slate-400">Путь от 385К к 1М | 2025-2026</p>
+                            
+                            <div className="mt-4 bg-slate-800 rounded-lg p-4 border border-slate-700">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-slate-300">Прогресс к цели</span>
+                                    <span className="text-2xl font-bold text-blue-400">{progressToGoal}%</span>
+                                </div>
+                                <div className="w-full bg-slate-700 rounded-full h-4">
+                                    <div 
+                                        className="bg-gradient-to-r from-blue-600 to-green-500 h-4 rounded-full transition-all duration-500"
+                                        style={{width: `${Math.min(progressToGoal, 100)}%`}}
+                                    ></div>
+                                </div>
+                                <div className="flex justify-between text-xs text-slate-400 mt-1">
+                                    <span>385,000₽</span>
+                                    <span>1,000,000₽</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
@@ -542,6 +590,180 @@
                                             </table>
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {activeTab === 'students' && (
+                                <div>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-xl font-bold">👥 База учеников</h2>
+                                        <button onClick={() => openModal('students')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm">
+                                            <Plus />Добавить
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                        <div className="bg-slate-900/50 p-4 rounded-lg">
+                                            <div className="text-slate-400 text-sm">Всего учеников</div>
+                                            <div className="text-2xl font-bold text-blue-400">{totalStudents}</div>
+                                        </div>
+                                        <div className="bg-slate-900/50 p-4 rounded-lg">
+                                            <div className="text-slate-400 text-sm">Активные</div>
+                                            <div className="text-2xl font-bold text-green-400">{activeStudents}</div>
+                                        </div>
+                                        <div className="bg-slate-900/50 p-4 rounded-lg">
+                                            <div className="text-slate-400 text-sm">Средний доход</div>
+                                            <div className="text-2xl font-bold text-yellow-400">{formatNumber(avgIncomePerStudent)}₽</div>
+                                        </div>
+                                    </div>
+                                    
+                                    {students.length === 0 ? (
+                                        <div className="text-center py-8 text-slate-400">
+                                            Нет учеников. Нажмите "Добавить" чтобы начать.
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="border-b border-slate-700">
+                                                        <th className="text-left py-2 px-2">Имя</th>
+                                                        <th className="text-left py-2 px-2">Телефон</th>
+                                                        <th className="text-left py-2 px-2">Группа</th>
+                                                        <th className="text-left py-2 px-2">Абонемент</th>
+                                                        <th className="text-left py-2 px-2">До</th>
+                                                        <th className="text-left py-2 px-2">Статус</th>
+                                                        <th className="text-center py-2 px-2">Действия</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {students.map((student, idx) => (
+                                                        <tr key={idx} className="border-b border-slate-700/50">
+                                                            <td className="py-2 px-2">{student.name}</td>
+                                                            <td className="py-2 px-2">{student.phone}</td>
+                                                            <td className="py-2 px-2">{student.group}</td>
+                                                            <td className="py-2 px-2">{student.subscription}</td>
+                                                            <td className="py-2 px-2">{student.expiryDate}</td>
+                                                            <td className="py-2 px-2">
+                                                                <span className={`px-2 py-1 rounded text-xs ${
+                                                                    student.status === 'Активный' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
+                                                                }`}>
+                                                                    {student.status}
+                                                                </span>
+                                                            </td>
+                                                            <td className="py-2 px-2">
+                                                                <div className="flex gap-2 justify-center">
+                                                                    <button onClick={() => openModal('students', idx)} className="text-blue-400">
+                                                                        <Edit />
+                                                                    </button>
+                                                                    <button onClick={() => deleteItem('students', idx)} className="text-red-400">
+                                                                        <Trash />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {activeTab === 'analytics' && (
+                                <div>
+                                    <h2 className="text-xl font-bold mb-4">📊 Аналитика и KPI</h2>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
+                                            <h3 className="text-lg font-bold mb-4 text-green-400">💰 Финансы</h3>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-300">Текущий доход (месяц):</span>
+                                                    <span className="font-semibold text-green-400">{formatNumber(totalMonthlyProfit + totalIndividual + totalPassive)}₽</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-300">Чистая прибыль:</span>
+                                                    <span className="font-semibold text-blue-400">{formatNumber(totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses)}₽</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-300">Рентабельность:</span>
+                                                    <span className="font-semibold text-yellow-400">
+                                                        {totalMonthlyIncome > 0 ? Math.round(((totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses) / (totalMonthlyIncome + totalIndividual + totalPassive)) * 100) : 0}%
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
+                                            <h3 className="text-lg font-bold mb-4 text-blue-400">👥 Ученики</h3>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-300">Всего учеников:</span>
+                                                    <span className="font-semibold">{totalStudents}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-300">Активных:</span>
+                                                    <span className="font-semibold text-green-400">{activeStudents}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-300">Средний доход с ученика:</span>
+                                                    <span className="font-semibold text-yellow-400">{formatNumber(avgIncomePerStudent)}₽</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
+                                            <h3 className="text-lg font-bold mb-4 text-purple-400">🎯 Цели</h3>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-300">Текущий: 385,000₽</span>
+                                                    <span className="font-semibold">→</span>
+                                                    <span className="text-slate-300">Цель: 1,000,000₽</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-300">Осталось:</span>
+                                                    <span className="font-semibold text-red-400">{formatNumber(1000000 - (totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses))}₽</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-300">Прогресс:</span>
+                                                    <span className="font-semibold text-blue-400">{progressToGoal}%</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
+                                            <h3 className="text-lg font-bold mb-4 text-orange-400">📈 Рост</h3>
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <div className="text-slate-300 text-sm mb-1">Чтобы достичь 1М нужно:</div>
+                                                    <div className="text-xs text-slate-400">
+                                                        • Увеличить доход на {formatNumber(Math.round((1000000 - (totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses)) / 12))}₽/мес
+                                                    </div>
+                                                    <div className="text-xs text-slate-400 mt-1">
+                                                        • Или привлечь еще ~{Math.round((1000000 - (totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses)) / (avgIncomePerStudent || 3000))} учеников
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-6 bg-gradient-to-r from-blue-900/50 to-purple-900/50 p-6 rounded-lg border-2 border-blue-600">
+                                        <h3 className="text-xl font-bold mb-2">🎉 Промежуточные цели</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                                            <div className="text-center">
+                                                <div className="text-2xl font-bold text-green-400">500,000₽</div>
+                                                <div className="text-sm text-slate-400">Первая цель</div>
+                                            </div>
+                                            <div className="text-center">
+                                                <div className="text-2xl font-bold text-yellow-400">750,000₽</div>
+                                                <div className="text-sm text-slate-400">Вторая цель</div>
+                                            </div>
+                                            <div className="text-center">
+                                                <div className="text-2xl font-bold text-blue-400">1,000,000₽</div>
+                                                <div className="text-sm text-slate-400">Финальная цель</div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
@@ -897,6 +1119,67 @@
                                         </>
                                     )}
 
+                                    {modalType === 'students' && (
+                                        <>
+                                            <input
+                                                type="text"
+                                                placeholder="Имя и фамилия"
+                                                value={formData.name || ''}
+                                                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            />
+                                            <input
+                                                type="tel"
+                                                placeholder="Телефон (+7...)"
+                                                value={formData.phone || ''}
+                                                onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            />
+                                            <select
+                                                value={formData.group || ''}
+                                                onChange={(e) => setFormData({...formData, group: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            >
+                                                <option value="">Выберите группу</option>
+                                                <option value="Долголетие Буденного">Долголетие Буденного</option>
+                                                <option value="Долголетие Черкизовская">Долголетие Черкизовская</option>
+                                                <option value="Латинский">Латинский</option>
+                                                <option value="Проам">Проам</option>
+                                                <option value="Внуково">Внуково</option>
+                                            </select>
+                                            <input
+                                                type="text"
+                                                placeholder="Абонемент (например: 8 занятий)"
+                                                value={formData.subscription || ''}
+                                                onChange={(e) => setFormData({...formData, subscription: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            />
+                                            <input
+                                                type="date"
+                                                placeholder="Действует до"
+                                                value={formData.expiryDate || ''}
+                                                onChange={(e) => setFormData({...formData, expiryDate: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            />
+                                            <select
+                                                value={formData.status || 'Активный'}
+                                                onChange={(e) => setFormData({...formData, status: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            >
+                                                <option value="Активный">Активный</option>
+                                                <option value="Неактивный">Неактивный</option>
+                                                <option value="Пробный">Пробный</option>
+                                            </select>
+                                            <input
+                                                type="text"
+                                                placeholder="Примечание (необязательно)"
+                                                value={formData.note || ''}
+                                                onChange={(e) => setFormData({...formData, note: e.target.value})}
+                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
+                                            />
+                                        </>
+                                    )}
+
                                     <div className="flex gap-2 mt-4">
                                         <button onClick={saveData} className="flex-1 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-semibold">
                                             Сохранить
@@ -916,4 +1199,4 @@
         ReactDOM.render(<FinanceTracker />, document.getElementById('root'));
     </script>
 </body>
-</html>
+</html> 
