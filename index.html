@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Учёт доходов TheGame</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -14,6 +15,10 @@
 
     <script type="text/babel">
         const { useState, useEffect } = React;
+
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand();
 
         const Download = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>);
         const Plus = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>);
@@ -30,6 +35,7 @@
             const [showModal, setShowModal] = useState(false);
             const [editingIndex, setEditingIndex] = useState(null);
             const [modalType, setModalType] = useState('monthly');
+            const [loading, setLoading] = useState(true);
             
             const tabs = [
                 { id: 'monthly', name: 'Месячный отчёт', icon: Calendar },
@@ -49,26 +55,77 @@
                 'Аренда Буденного'
             ];
 
-            const loadData = (key, defaultData) => {
+            // Облачное хранилище через Telegram CloudStorage
+            const loadFromCloud = async (key, defaultData) => {
                 try {
-                    const saved = localStorage.getItem(key);
-                    return saved ? JSON.parse(saved) : defaultData;
+                    if (tg.CloudStorage) {
+                        return new Promise((resolve) => {
+                            tg.CloudStorage.getItem(key, (error, value) => {
+                                if (!error && value) {
+                                    try {
+                                        resolve(JSON.parse(value));
+                                    } catch {
+                                        resolve(defaultData);
+                                    }
+                                } else {
+                                    resolve(defaultData);
+                                }
+                            });
+                        });
+                    } else {
+                        // Fallback на localStorage если CloudStorage недоступен
+                        const saved = localStorage.getItem(key);
+                        return saved ? JSON.parse(saved) : defaultData;
+                    }
                 } catch {
                     return defaultData;
                 }
             };
 
-            const [monthlyData, setMonthlyData] = useState(() => loadData('monthlyData', []));
-            const [expenses, setExpenses] = useState(() => loadData('expenses', []));
-            const [passive, setPassive] = useState(() => loadData('passive', []));
-            const [individual, setIndividual] = useState(() => loadData('individual', []));
-            const [monthlyResults, setMonthlyResults] = useState(() => loadData('monthlyResults', []));
+            const saveToCloud = async (key, data) => {
+                try {
+                    const value = JSON.stringify(data);
+                    if (tg.CloudStorage) {
+                        tg.CloudStorage.setItem(key, value);
+                    }
+                    // Дублируем в localStorage для надёжности
+                    localStorage.setItem(key, value);
+                } catch (error) {
+                    console.error('Save error:', error);
+                }
+            };
 
-            useEffect(() => { try { localStorage.setItem('monthlyData', JSON.stringify(monthlyData)); } catch {} }, [monthlyData]);
-            useEffect(() => { try { localStorage.setItem('expenses', JSON.stringify(expenses)); } catch {} }, [expenses]);
-            useEffect(() => { try { localStorage.setItem('passive', JSON.stringify(passive)); } catch {} }, [passive]);
-            useEffect(() => { try { localStorage.setItem('individual', JSON.stringify(individual)); } catch {} }, [individual]);
-            useEffect(() => { try { localStorage.setItem('monthlyResults', JSON.stringify(monthlyResults)); } catch {} }, [monthlyResults]);
+            const [monthlyData, setMonthlyData] = useState([]);
+            const [expenses, setExpenses] = useState([]);
+            const [passive, setPassive] = useState([]);
+            const [individual, setIndividual] = useState([]);
+            const [monthlyResults, setMonthlyResults] = useState([]);
+
+            // Загрузка данных при старте
+            useEffect(() => {
+                const loadAllData = async () => {
+                    const monthly = await loadFromCloud('monthlyData', []);
+                    const exp = await loadFromCloud('expenses', []);
+                    const pass = await loadFromCloud('passive', []);
+                    const indiv = await loadFromCloud('individual', []);
+                    const results = await loadFromCloud('monthlyResults', []);
+                    
+                    setMonthlyData(monthly);
+                    setExpenses(exp);
+                    setPassive(pass);
+                    setIndividual(indiv);
+                    setMonthlyResults(results);
+                    setLoading(false);
+                };
+                loadAllData();
+            }, []);
+
+            // Автосохранение в облако
+            useEffect(() => { if (!loading) saveToCloud('monthlyData', monthlyData); }, [monthlyData]);
+            useEffect(() => { if (!loading) saveToCloud('expenses', expenses); }, [expenses]);
+            useEffect(() => { if (!loading) saveToCloud('passive', passive); }, [passive]);
+            useEffect(() => { if (!loading) saveToCloud('individual', individual); }, [individual]);
+            useEffect(() => { if (!loading) saveToCloud('monthlyResults', monthlyResults); }, [monthlyResults]);
 
             const [formData, setFormData] = useState({});
 
@@ -80,6 +137,14 @@
             const totalIndividual = individual.reduce((sum, item) => sum + (item.income || 0), 0);
 
             const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num);
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+                        <div className="text-white text-xl">Загрузка данных...</div>
+                    </div>
+                );
+            }
 
             const openModal = (type, index = null) => {
                 setModalType(type);
@@ -202,11 +267,12 @@
             const exportSummaryToCSV = () => {
                 let csv = 'Сводка за месяц - TheGame\n\n';
                 csv += 'Статья,Сумма\n';
-                csv += `Месячный отчёт (групповые),${totalMonthlyIncome}₽\n`;
+                csv += `Месячный отчёт (доход),${totalMonthlyIncome}₽\n`;
+                csv += `Месячный отчёт (расход),-${totalMonthlyExpense}₽\n`;
                 csv += `Индивидуальные занятия,${totalIndividual}₽\n`;
                 csv += `Пассивный доход,${totalPassive}₽\n`;
                 csv += `Постоянные расходы,-${totalExpenses}₽\n`;
-                csv += `ЧИСТАЯ ПРИБЫЛЬ,${totalMonthlyIncome + totalIndividual + totalPassive - totalExpenses}₽\n`;
+                csv += `ЧИСТАЯ ПРИБЫЛЬ,${totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses}₽\n`;
                 
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement('a');
@@ -489,8 +555,12 @@
                                     </div>
                                     <div className="space-y-3">
                                         <div className="flex justify-between p-3 bg-slate-900/50 rounded">
-                                            <span>Месячный отчёт (групповые):</span>
+                                            <span>Месячный отчёт (доход):</span>
                                             <span className="font-bold text-green-400">{formatNumber(totalMonthlyIncome)}₽</span>
+                                        </div>
+                                        <div className="flex justify-between p-3 bg-slate-900/50 rounded">
+                                            <span>Месячный отчёт (расход):</span>
+                                            <span className="font-bold text-red-400">-{formatNumber(totalMonthlyExpense)}₽</span>
                                         </div>
                                         <div className="flex justify-between p-3 bg-slate-900/50 rounded">
                                             <span>Индивидуальные занятия:</span>
@@ -506,7 +576,7 @@
                                         </div>
                                         <div className="flex justify-between p-4 bg-blue-900/50 rounded border-2 border-blue-600 mt-4">
                                             <span className="text-lg font-bold">ЧИСТАЯ ПРИБЫЛЬ:</span>
-                                            <span className="text-xl font-bold text-blue-400">{formatNumber(totalMonthlyIncome + totalIndividual + totalPassive - totalExpenses)}₽</span>
+                                            <span className="text-xl font-bold text-blue-400">{formatNumber(totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses)}₽</span>
                                         </div>
                                     </div>
                                 </div>
@@ -847,4 +917,3 @@
     </script>
 </body>
 </html>
-                
