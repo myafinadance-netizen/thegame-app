@@ -1,1202 +1,407 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Учёт доходов TheGame</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Финансовый бот — Месячный отчёт и аналитика</title>
+<style>
+  /* Простой адаптивный стиль — сделан чтобы сразу было видно контент на телефоне */
+  :root{--brand:#2563eb;--muted:#6b7280}
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; margin:0; background:#f3f4f6; color:#111}
+  header{background:var(--brand); color:#fff; padding:14px 16px; display:flex; gap:12px; align-items:center}
+  header h1{font-size:16px; margin:0; flex:1}
+  main{max-width:1100px; margin:12px auto; padding:12px; background:#fff; border-radius:10px}
+  nav.tabs{display:flex; gap:8px; margin-bottom:10px; overflow:auto; padding-bottom:6px}
+  .tab{padding:8px 12px; border-radius:8px; background:#eef2ff; color:var(--brand); font-weight:600; cursor:pointer; white-space:nowrap}
+  .tab.active{background:var(--brand); color:#fff}
+  .toolbar{display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap}
+  .btn{background:var(--brand); color:#fff; border:none; padding:8px 10px; border-radius:8px; cursor:pointer}
+  .btn.ghost{background:#fff; color:var(--brand); border:1px solid var(--brand)}
+  .muted{color:var(--muted); font-size:13px}
+  table{width:100%; border-collapse:collapse; margin-top:8px; font-size:14px}
+  th,td{padding:8px; border:1px solid #e6edf3; text-align:left}
+  th{background:#f8fafc}
+  .card-row{display:flex; gap:8px; margin:8px 0; flex-wrap:wrap}
+  .card{background:#f8fafc; padding:10px; border-radius:8px; min-width:140px; border:1px solid #eef2ff}
+  .modal{position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center; z-index:999}
+  .modal .box{background:#fff; padding:14px; border-radius:8px; width:720px; max-width:95%; max-height:86%; overflow:auto}
+  label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px}
+  input,select,textarea{width:100%; padding:8px; border-radius:8px; border:1px solid #e6eef9; margin-bottom:8px}
+  .small{font-size:13px; padding:6px 8px}
+  footer{font-size:13px; color:var(--muted); margin-top:10px}
+  /* ensure first content visible without scroll on mobile */
+  @media (max-width:480px){ header{padding:12px} main{margin:8px} .card{min-width:120px} }
+</style>
 </head>
 <body>
-    <div id="root"></div>
+<header>
+  <h1>Финансовый бот — Месячный отчёт, Аналитика, База</h1>
+  <div style="font-size:13px; opacity:0.95">Local</div>
+</header>
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
+<main id="app">
+  <nav class="tabs" id="tabs"></nav>
 
-        // Инициализация Telegram WebApp
-        const tg = window.Telegram.WebApp;
-        tg.expand();
+  <div class="toolbar" id="toolbar"></div>
 
-        const Download = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>);
-        const Plus = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>);
-        const Trash = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>);
-        const Edit = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>);
-        const Calendar = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>);
-        const TrendingUp = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>);
-        const BarChart = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>);
-        const Users = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>);
-        const X = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>);
+  <div id="content"></div>
 
-        function FinanceTracker() {
-            const [activeTab, setActiveTab] = useState('monthly');
-            const [showModal, setShowModal] = useState(false);
-            const [editingIndex, setEditingIndex] = useState(null);
-            const [modalType, setModalType] = useState('monthly');
-            const [loading, setLoading] = useState(true);
-            
-            const tabs = [
-                { id: 'monthly', name: 'Месячный отчёт', icon: Calendar },
-                { id: 'expenses', name: 'Расходы', icon: TrendingUp },
-                { id: 'passive', name: 'Пассивный', icon: BarChart },
-                { id: 'individual', name: 'Индивидуалки', icon: Users },
-                { id: 'students', name: 'База учеников', icon: Users },
-                { id: 'analytics', name: 'Аналитика', icon: BarChart },
-                { id: 'summary', name: 'Сводка', icon: BarChart },
-                { id: 'results', name: 'По месяцам', icon: Calendar },
-            ];
+  <footer>Данные хранятся в localStorage. Экспорт/импорт JSON доступен в тулбаре.</footer>
+</main>
 
-            const locations = [
-                'Долголетие Буденного',
-                'Долголетие Черкизовская',
-                'Индивидуалки Латинский',
-                'Индивидуалки Проам',
-                'Индивидуалки Внуково',
-                'Аренда Буденного'
-            ];
+<div id="modal-root"></div>
 
-            // Облачное хранилище через Telegram CloudStorage
-            const loadFromCloud = async (key, defaultData) => {
-                try {
-                    if (tg.CloudStorage) {
-                        return new Promise((resolve) => {
-                            tg.CloudStorage.getItem(key, (error, value) => {
-                                if (!error && value) {
-                                    try {
-                                        resolve(JSON.parse(value));
-                                    } catch {
-                                        resolve(defaultData);
-                                    }
-                                } else {
-                                    resolve(defaultData);
-                                }
-                            });
-                        });
-                    } else {
-                        // Fallback на localStorage если CloudStorage недоступен
-                        const saved = localStorage.getItem(key);
-                        return saved ? JSON.parse(saved) : defaultData;
-                    }
-                } catch {
-                    return defaultData;
-                }
-            };
+<script>
+/* Single-file app (готово для GitHub) — быстрый справочник:
+   - Добавить запись: "Добавить" -> заполнить поля -> сохранить
+   - "Расход за зал" доступен в форме
+   - Аналитика: рейтинг педагогов/локаций
+   - Экспорт JSON: сохранить резервную копию
+*/
 
-            const saveToCloud = async (key, data) => {
-                try {
-                    const value = JSON.stringify(data);
-                    if (tg.CloudStorage) {
-                        tg.CloudStorage.setItem(key, value);
-                    }
-                    // Дублируем в localStorage для надёжности
-                    localStorage.setItem(key, value);
-                } catch (error) {
-                    console.error('Save error:', error);
-                }
-            };
+const DEFAULT = {
+  monthlyData: [],
+  individual: [],
+  expenses: [],
+  passive: [],
+  monthlyResults: [],
+  students: []
+};
 
-            const [monthlyData, setMonthlyData] = useState([]);
-            const [expenses, setExpenses] = useState([]);
-            const [passive, setPassive] = useState([]);
-            const [individual, setIndividual] = useState([]);
-            const [monthlyResults, setMonthlyResults] = useState([]);
-            const [students, setStudents] = useState([]);
+let state = loadState();
+const TABS = ['Месячный отчёт','Аналитика','База учеников','По месяцам','Настройки'];
+let activeTab = localStorage.getItem('activeTab') || TABS[0];
 
-            // Загрузка данных при старте
-            useEffect(() => {
-                const loadAllData = async () => {
-                    const monthly = await loadFromCloud('monthlyData', []);
-                    const exp = await loadFromCloud('expenses', []);
-                    const pass = await loadFromCloud('passive', []);
-                    const indiv = await loadFromCloud('individual', []);
-                    const results = await loadFromCloud('monthlyResults', []);
-                    const studs = await loadFromCloud('students', []);
-                    
-                    setMonthlyData(monthly);
-                    setExpenses(exp);
-                    setPassive(pass);
-                    setIndividual(indiv);
-                    setMonthlyResults(results);
-                    setStudents(studs);
-                    setLoading(false);
-                };
-                loadAllData();
-            }, []);
+const tabsRoot = document.getElementById('tabs');
+const toolbar = document.getElementById('toolbar');
+const content = document.getElementById('content');
+const modalRoot = document.getElementById('modal-root');
 
-            // Автосохранение в облако
-            useEffect(() => { if (!loading) saveToCloud('monthlyData', monthlyData); }, [monthlyData]);
-            useEffect(() => { if (!loading) saveToCloud('expenses', expenses); }, [expenses]);
-            useEffect(() => { if (!loading) saveToCloud('passive', passive); }, [passive]);
-            useEffect(() => { if (!loading) saveToCloud('individual', individual); }, [individual]);
-            useEffect(() => { if (!loading) saveToCloud('monthlyResults', monthlyResults); }, [monthlyResults]);
-            useEffect(() => { if (!loading) saveToCloud('students', students); }, [students]);
+renderTabs();
+renderToolbar();
+renderContent();
 
-            const [formData, setFormData] = useState({});
+function genId(){ return 'id-'+Math.random().toString(36).slice(2,9); }
+function saveState(){ localStorage.setItem('finData', JSON.stringify(state)); }
+function loadState(){
+  try{
+    const raw = localStorage.getItem('finData');
+    if(!raw){ localStorage.setItem('finData', JSON.stringify(DEFAULT)); return JSON.parse(JSON.stringify(DEFAULT)); }
+    const s = JSON.parse(raw);
+    s.monthlyData = (s.monthlyData||[]).map(r => ({ id:r.id||genId(), date:r.date||new Date().toISOString().slice(0,10), location:r.location||'', club:r.club||r.location||'', category:r.category||guessCategory(r), type:r.type||'', teacher:r.teacher||'', people:Number(r.people||0), income:Number(r.income||0), expense:Number(r.expense||0), hallExpense:Number(r.hallExpense||0), profit: Number(r.profit || (Number(r.income||0)-Number(r.expense||0)-Number(r.hallExpense||0))), note:r.note||'' }));
+    s.individual = (s.individual||[]).map(r => ({ id:r.id||genId(), date:r.date||'', client:r.client||'', clientId:r.clientId||'', teacher:r.teacher||'', location:r.location||'', hours:Number(r.hours||0), rate:Number(r.rate||0), income:Number(r.income||0), note:r.note||'' }));
+    s.expenses = (s.expenses||[]).map(r => ({ id:r.id||genId(), date:r.date||'', item:r.item||'', amount:Number(r.amount||0), note:r.note||'' }));
+    s.passive = (s.passive||[]).map(r => ({ id:r.id||genId(), source:r.source||'', monthly:Number(r.monthly||0), capital:Number(r.capital||0), rate:Number(r.rate||0), note:r.note||'' }));
+    s.monthlyResults = (s.monthlyResults||[]).map(r => ({ id:r.id||genId(), month:r.month||'', year:r.year||new Date().getFullYear(), group_MoscowDolgoletie:Number(r.group_MoscowDolgoletie||0), individual:Number(r.individual||0), passive:Number(r.passive||0), hall_rent_expense:Number(r.hall_rent_expense||0), expenses_fixed:Number(r.expenses_fixed||0), totalIncome:Number(r.totalIncome||0), totalExpenses:Number(r.totalExpenses||0), profit:Number(r.profit||0), note:r.note||'' }));
+    s.students = (s.students||[]).map(r => ({ id:r.id||genId(), name:r.name||'', phone:r.phone||'', groups:r.groups||[] }));
+    return s;
+  }catch(e){
+    console.error('load error', e);
+    localStorage.setItem('finData', JSON.stringify(DEFAULT));
+    return JSON.parse(JSON.stringify(DEFAULT));
+  }
+}
 
-            const totalMonthlyIncome = monthlyData.reduce((sum, item) => sum + (item.income || 0), 0);
-            const totalMonthlyExpense = monthlyData.reduce((sum, item) => sum + (item.expense || 0), 0);
-            const totalMonthlyProfit = monthlyData.reduce((sum, item) => sum + (item.profit || 0), 0);
-            const totalExpenses = expenses.reduce((sum, item) => sum + (item.amount || 0), 0);
-            const totalPassive = passive.reduce((sum, item) => sum + (item.monthly || 0), 0);
-            const totalIndividual = individual.reduce((sum, item) => sum + (item.income || 0), 0);
-            
-            // Аналитика
-            const totalStudents = students.length;
-            const activeStudents = students.filter(s => s.status === 'Активный').length;
-            const avgIncomePerStudent = totalStudents > 0 ? Math.round((totalMonthlyIncome + totalIndividual) / totalStudents) : 0;
-            const progressToGoal = Math.round(((totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses) / 1000000) * 100);
+function guessCategory(r){
+  if(!r) return 'Прочее';
+  const loc = (r.location||'').toLowerCase();
+  if(loc.includes('долголет')) return 'Московское долголетие';
+  if((r.type||'').toLowerCase().includes('индив')) return 'Индивидуальные уроки';
+  return r.category || 'Прочее';
+}
 
-            const formatNumber = (num) => new Intl.NumberFormat('ru-RU').format(num);
+function fmt(n){ return Number(n||0).toLocaleString('ru-RU'); }
+function downloadFile(filename, text){ const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(text); a.download=filename; a.click(); }
 
-            if (loading) {
-                return (
-                    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
-                        <div className="text-white text-xl">Загрузка данных...</div>
-                    </div>
-                );
-            }
+function renderTabs(){
+  tabsRoot.innerHTML='';
+  TABS.forEach(t => {
+    const d = document.createElement('div'); d.className='tab'+(t===activeTab?' active':''); d.textContent=t;
+    d.onclick = ()=>{ activeTab=t; localStorage.setItem('activeTab', t); renderTabs(); renderToolbar(); renderContent(); };
+    tabsRoot.appendChild(d);
+  });
+}
 
-            const openModal = (type, index = null) => {
-                setModalType(type);
-                setEditingIndex(index);
-                
-                if (index !== null) {
-                    if (type === 'monthly') setFormData({...monthlyData[index]});
-                    if (type === 'expenses') setFormData({...expenses[index]});
-                    if (type === 'passive') setFormData({...passive[index]});
-                    if (type === 'individual') setFormData({...individual[index]});
-                    if (type === 'results') setFormData({...monthlyResults[index]});
-                    if (type === 'students') setFormData({...students[index]});
-                } else {
-                    setFormData({});
-                }
-                setShowModal(true);
-            };
+function renderToolbar(){
+  toolbar.innerHTML='';
+  const add = el('button','Добавить','btn'); add.onclick = ()=> openModal(addMonthlyForm());
+  toolbar.appendChild(add);
 
-            const saveData = () => {
-                if (modalType === 'monthly') {
-                    const income = parseFloat(formData.income) || 0;
-                    const expense = parseFloat(formData.expense) || 0;
-                    const newData = {
-                        date: formData.date || '',
-                        location: formData.location || '',
-                        type: formData.type || '',
-                        teacher: formData.teacher || '',
-                        people: parseInt(formData.people) || 0,
-                        income: income,
-                        expense: expense,
-                        profit: income - expense,
-                        note: formData.note || ''
-                    };
-                    if (editingIndex !== null) {
-                        const updated = [...monthlyData];
-                        updated[editingIndex] = newData;
-                        setMonthlyData(updated);
-                    } else {
-                        setMonthlyData([...monthlyData, newData]);
-                    }
-                } else if (modalType === 'expenses') {
-                    const newData = {
-                        item: formData.item || '',
-                        amount: parseFloat(formData.amount) || 0,
-                        comment: formData.comment || ''
-                    };
-                    if (editingIndex !== null) {
-                        const updated = [...expenses];
-                        updated[editingIndex] = newData;
-                        setExpenses(updated);
-                    } else {
-                        setExpenses([...expenses, newData]);
-                    }
-                } else if (modalType === 'passive') {
-                    const newData = {
-                        source: formData.source || '',
-                        monthly: parseFloat(formData.monthly) || 0,
-                        capital: parseFloat(formData.capital) || 0,
-                        rate: parseFloat(formData.rate) || 0
-                    };
-                    if (editingIndex !== null) {
-                        const updated = [...passive];
-                        updated[editingIndex] = newData;
-                        setPassive(updated);
-                    } else {
-                        setPassive([...passive, newData]);
-                    }
-                } else if (modalType === 'individual') {
-                    const hours = parseFloat(formData.hours) || 0;
-                    const rate = parseFloat(formData.rate) || 0;
-                    const newData = {
-                        date: formData.date || '',
-                        client: formData.client || '',
-                        location: formData.location || '',
-                        hours: hours,
-                        rate: rate,
-                        income: hours * rate,
-                        note: formData.note || ''
-                    };
-                    if (editingIndex !== null) {
-                        const updated = [...individual];
-                        updated[editingIndex] = newData;
-                        setIndividual(updated);
-                    } else {
-                        setIndividual([...individual, newData]);
-                    }
-                } else if (modalType === 'results') {
-                    const newData = {
-                        month: formData.month || '',
-                        year: formData.year || '',
-                        groupIncome: parseFloat(formData.groupIncome) || 0,
-                        individualIncome: parseFloat(formData.individualIncome) || 0,
-                        passiveIncome: parseFloat(formData.passiveIncome) || 0,
-                        expenses: parseFloat(formData.expenses) || 0,
-                        profit: (parseFloat(formData.groupIncome) || 0) + (parseFloat(formData.individualIncome) || 0) + (parseFloat(formData.passiveIncome) || 0) - (parseFloat(formData.expenses) || 0),
-                        note: formData.note || ''
-                    };
-                    if (editingIndex !== null) {
-                        const updated = [...monthlyResults];
-                        updated[editingIndex] = newData;
-                        setMonthlyResults(updated);
-                    } else {
-                        setMonthlyResults([...monthlyResults, newData]);
-                    }
-                } else if (modalType === 'students') {
-                    const newData = {
-                        name: formData.name || '',
-                        phone: formData.phone || '',
-                        group: formData.group || '',
-                        subscription: formData.subscription || '',
-                        expiryDate: formData.expiryDate || '',
-                        status: formData.status || 'Активный',
-                        note: formData.note || ''
-                    };
-                    if (editingIndex !== null) {
-                        const updated = [...students];
-                        updated[editingIndex] = newData;
-                        setStudents(updated);
-                    } else {
-                        setStudents([...students, newData]);
-                    }
-                }
+  const expCSV = el('button','Экспорт CSV','btn ghost'); expCSV.onclick = ()=> exportCSV();
+  toolbar.appendChild(expCSV);
 
-                setShowModal(false);
-                setFormData({});
-            };
+  const expJSON = el('button','Экспорт JSON','btn ghost'); expJSON.onclick = ()=> downloadFile('finData.json', JSON.stringify(state, null, 2));
+  toolbar.appendChild(expJSON);
 
-            const deleteItem = (type, index) => {
-                if (!confirm('Удалить эту запись?')) return;
-                
-                if (type === 'monthly') setMonthlyData(monthlyData.filter((_, i) => i !== index));
-                if (type === 'expenses') setExpenses(expenses.filter((_, i) => i !== index));
-                if (type === 'passive') setPassive(passive.filter((_, i) => i !== index));
-                if (type === 'individual') setIndividual(individual.filter((_, i) => i !== index));
-                if (type === 'results') setMonthlyResults(monthlyResults.filter((_, i) => i !== index));
-                if (type === 'students') setStudents(students.filter((_, i) => i !== index));
-            };
+  const imp = el('button','Импорт JSON','btn ghost'); imp.onclick = ()=> openModal(importForm());
+  toolbar.appendChild(imp);
 
-            const exportSummaryToCSV = () => {
-                let csv = 'Сводка за месяц - TheGame\n\n';
-                csv += 'Статья,Сумма\n';
-                csv += `Месячный отчёт (доход),${totalMonthlyIncome}₽\n`;
-                csv += `Месячный отчёт (расход),-${totalMonthlyExpense}₽\n`;
-                csv += `Индивидуальные занятия,${totalIndividual}₽\n`;
-                csv += `Пассивный доход,${totalPassive}₽\n`;
-                csv += `Постоянные расходы,-${totalExpenses}₽\n`;
-                csv += `ЧИСТАЯ ПРИБЫЛЬ,${totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses}₽\n`;
-                
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = 'summary_thegame.csv';
-                link.click();
-            };
+  const info = document.createElement('div'); info.className='muted';
+  info.style.marginLeft='auto'; info.textContent = `Записей: ${state.monthlyData.length}`;
+  toolbar.appendChild(info);
+}
 
-            return (
-                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-4">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="mb-6">
-                            <h1 className="text-3xl font-bold mb-2">💰 Учёт доходов TheGame</h1>
-                            <p className="text-slate-400">Путь от 385К к 1М | 2025-2026</p>
-                            
-                            <div className="mt-4 bg-slate-800 rounded-lg p-4 border border-slate-700">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="text-slate-300">Прогресс к цели</span>
-                                    <span className="text-2xl font-bold text-blue-400">{progressToGoal}%</span>
-                                </div>
-                                <div className="w-full bg-slate-700 rounded-full h-4">
-                                    <div 
-                                        className="bg-gradient-to-r from-blue-600 to-green-500 h-4 rounded-full transition-all duration-500"
-                                        style={{width: `${Math.min(progressToGoal, 100)}%`}}
-                                    ></div>
-                                </div>
-                                <div className="flex justify-between text-xs text-slate-400 mt-1">
-                                    <span>385,000₽</span>
-                                    <span>1,000,000₽</span>
-                                </div>
-                            </div>
-                        </div>
+function renderContent(){
+  content.innerHTML='';
+  if(activeTab==='Месячный отчёт') return renderMonthly();
+  if(activeTab==='Аналитика') return renderAnalytics();
+  if(activeTab==='База учеников') return renderStudents();
+  if(activeTab==='По месяцам') return renderByMonths();
+  if(activeTab==='Настройки') return renderSettings();
+}
 
-                        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-                            {tabs.map((tab) => {
-                                const Icon = tab.icon;
-                                return (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => setActiveTab(tab.id)}
-                                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition whitespace-nowrap ${
-                                            activeTab === tab.id ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                                        }`}
-                                    >
-                                        <Icon />
-                                        {tab.name}
-                                    </button>
-                                );
-                            })}
-                        </div>
+/* Monthly */
+function renderMonthly(){
+  const container = document.createElement('div');
+  const head = document.createElement('h3'); head.textContent='Месячный отчёт (записи)'; container.appendChild(head);
+  const note = document.createElement('div'); note.className='muted'; note.textContent='Добавляй сессии — у каждой запись можно указать Расход за зал.'; container.appendChild(note);
 
-                        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
-                            {activeTab === 'monthly' && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-xl font-bold">📅 Месячный отчёт</h2>
-                                        <button onClick={() => openModal('monthly')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm">
-                                            <Plus />Добавить
-                                        </button>
-                                    </div>
-                                    
-                                    {monthlyData.length === 0 ? (
-                                        <div className="text-center py-8 text-slate-400">
-                                            Нет записей. Нажмите "Добавить" чтобы начать.
-                                        </div>
-                                    ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-sm">
-                                                <thead>
-                                                    <tr className="border-b border-slate-700">
-                                                        <th className="text-left py-2 px-2">Дата</th>
-                                                        <th className="text-left py-2 px-2">Локация</th>
-                                                        <th className="text-right py-2 px-2">Людей</th>
-                                                        <th className="text-right py-2 px-2">Доход</th>
-                                                        <th className="text-right py-2 px-2">Расход</th>
-                                                        <th className="text-right py-2 px-2">Прибыль</th>
-                                                        <th className="text-center py-2 px-2">Действия</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {monthlyData.map((row, idx) => (
-                                                        <tr key={idx} className="border-b border-slate-700/50">
-                                                            <td className="py-2 px-2">{row.date}</td>
-                                                            <td className="py-2 px-2">{row.location}</td>
-                                                            <td className="text-right py-2 px-2">{row.people}</td>
-                                                            <td className="text-right py-2 px-2 text-green-400">{formatNumber(row.income)}₽</td>
-                                                            <td className="text-right py-2 px-2 text-red-400">{formatNumber(row.expense)}₽</td>
-                                                            <td className="text-right py-2 px-2 text-blue-400 font-bold">{formatNumber(row.profit)}₽</td>
-                                                            <td className="py-2 px-2">
-                                                                <div className="flex gap-2 justify-center">
-                                                                    <button onClick={() => openModal('monthly', idx)} className="text-blue-400">
-                                                                        <Edit />
-                                                                    </button>
-                                                                    <button onClick={() => deleteItem('monthly', idx)} className="text-red-400">
-                                                                        <Trash />
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                                <tfoot className="bg-slate-900/50">
-                                                    <tr className="font-bold">
-                                                        <td colSpan="3" className="py-2 px-2">ИТОГО:</td>
-                                                        <td className="text-right py-2 px-2 text-green-400">{formatNumber(totalMonthlyIncome)}₽</td>
-                                                        <td className="text-right py-2 px-2 text-red-400">{formatNumber(totalMonthlyExpense)}₽</td>
-                                                        <td className="text-right py-2 px-2 text-blue-400">{formatNumber(totalMonthlyProfit)}₽</td>
-                                                        <td></td>
-                                                    </tr>
-                                                </tfoot>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+  const table = document.createElement('table');
+  table.innerHTML = `<thead><tr><th>Дата</th><th>Категория</th><th>Локация</th><th>Тип</th><th>Педагог</th><th>Чел.</th><th>Выручка</th><th>Расход</th><th>Аренда зала</th><th>Прибыль</th><th>Действия</th></tr></thead><tbody></tbody>`;
+  const tbody = table.querySelector('tbody');
+  state.monthlyData.slice().reverse().forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.date}</td><td>${r.category}</td><td><span class="link" data-loc="${r.location}">${r.location}</span></td><td>${r.type}</td><td>${r.teacher}</td><td>${r.people}</td><td>${fmt(r.income)}</td><td>${fmt(r.expense)}</td><td>${fmt(r.hallExpense)}</td><td>${fmt(r.profit)}</td><td><button class="small btn ghost" data-edit="${r.id}">Ред.</button> <button class="small btn" data-del="${r.id}">Удалить</button></td>`;
+    tbody.appendChild(tr);
+  });
+  table.addEventListener('click', e=>{
+    const id = e.target.getAttribute('data-edit'); const del = e.target.getAttribute('data-del'); const loc = e.target.getAttribute('data-loc');
+    if(id){ const rec = state.monthlyData.find(x=>x.id===id); openModal(addMonthlyForm(rec)); }
+    if(del){ if(confirm('Удалить запись?')){ state.monthlyData = state.monthlyData.filter(x=>x.id!==del); saveState(); renderContent(); } }
+    if(loc) openModal(locationDetail(loc));
+  });
 
-                            {activeTab === 'expenses' && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-xl font-bold">💸 Постоянные расходы</h2>
-                                        <button onClick={() => openModal('expenses')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm">
-                                            <Plus />Добавить
-                                        </button>
-                                    </div>
-                                    {expenses.length === 0 ? (
-                                        <div className="text-center py-8 text-slate-400">
-                                            Нет расходов. Нажмите "Добавить" чтобы начать.
-                                        </div>
-                                    ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full">
-                                                <thead>
-                                                    <tr className="border-b border-slate-700">
-                                                        <th className="text-left py-2 px-2">Статья расхода</th>
-                                                        <th className="text-right py-2 px-2">Сумма/мес</th>
-                                                        <th className="text-left py-2 px-2">Комментарий</th>
-                                                        <th className="text-center py-2 px-2">Действия</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {expenses.map((row, idx) => (
-                                                        <tr key={idx} className="border-b border-slate-700/50">
-                                                            <td className="py-2 px-2">{row.item}</td>
-                                                            <td className="text-right py-2 px-2 text-red-400 font-semibold">{formatNumber(row.amount)}₽</td>
-                                                            <td className="py-2 px-2 text-slate-400 text-sm">{row.comment}</td>
-                                                            <td className="py-2 px-2">
-                                                                <div className="flex gap-2 justify-center">
-                                                                    <button onClick={() => openModal('expenses', idx)} className="text-blue-400">
-                                                                        <Edit />
-                                                                    </button>
-                                                                    <button onClick={() => deleteItem('expenses', idx)} className="text-red-400">
-                                                                        <Trash />
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                                <tfoot className="bg-slate-900/50">
-                                                    <tr className="font-bold">
-                                                        <td className="py-2 px-2">ИТОГО:</td>
-                                                        <td className="text-right py-2 px-2 text-red-400">{formatNumber(totalExpenses)}₽</td>
-                                                        <td colSpan="2"></td>
-                                                    </tr>
-                                                </tfoot>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+  // sums
+  const totals = state.monthlyData.reduce((s,i)=>{ s.income+=i.income; s.expense+=i.expense; s.hall+=i.hallExpense; s.profit+=i.profit; return s; }, {income:0, expense:0, hall:0, profit:0});
+  const footer = document.createElement('div'); footer.className='card-row';
+  ['Доход','Расходы','Аренда','Прибыль'].forEach((t,i) => {
+    const c = document.createElement('div'); c.className='card'; c.innerHTML = `<div style="font-size:13px;color:var(--muted)">${t}</div><div style="font-weight:700">${[fmt(totals.income),fmt(totals.expense),fmt(totals.hall),fmt(totals.profit)][i]} ₽</div>`; footer.appendChild(c);
+  });
 
-                            {activeTab === 'passive' && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-xl font-bold">💰 Пассивный доход</h2>
-                                        <button onClick={() => openModal('passive')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm">
-                                            <Plus />Добавить
-                                        </button>
-                                    </div>
-                                    {passive.length === 0 ? (
-                                        <div className="text-center py-8 text-slate-400">
-                                            Нет источников пассивного дохода. Нажмите "Добавить".
-                                        </div>
-                                    ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full">
-                                                <thead>
-                                                    <tr className="border-b border-slate-700">
-                                                        <th className="text-left py-2 px-2">Источник</th>
-                                                        <th className="text-right py-2 px-2">Сумма/мес</th>
-                                                        <th className="text-right py-2 px-2">Капитал</th>
-                                                        <th className="text-right py-2 px-2">Ставка %</th>
-                                                        <th className="text-center py-2 px-2">Действия</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {passive.map((row, idx) => (
-                                                        <tr key={idx} className="border-b border-slate-700/50">
-                                                            <td className="py-2 px-2">{row.source}</td>
-                                                            <td className="text-right py-2 px-2 text-green-400 font-semibold">{formatNumber(row.monthly)}₽</td>
-                                                            <td className="text-right py-2 px-2">{row.capital ? formatNumber(row.capital) + '₽' : '—'}</td>
-                                                            <td className="text-right py-2 px-2">{row.rate ? row.rate + '%' : '—'}</td>
-                                                            <td className="py-2 px-2">
-                                                                <div className="flex gap-2 justify-center">
-                                                                    <button onClick={() => openModal('passive', idx)} className="text-blue-400">
-                                                                        <Edit />
-                                                                    </button>
-                                                                    <button onClick={() => deleteItem('passive', idx)} className="text-red-400">
-                                                                        <Trash />
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                                <tfoot className="bg-slate-900/50">
-                                                    <tr className="font-bold">
-                                                        <td className="py-2 px-2">ИТОГО:</td>
-                                                        <td className="text-right py-2 px-2 text-green-400">{formatNumber(totalPassive)}₽</td>
-                                                        <td colSpan="3"></td>
-                                                    </tr>
-                                                </tfoot>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+  container.appendChild(table);
+  container.appendChild(footer);
+  content.appendChild(container);
+}
 
-                            {activeTab === 'individual' && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-xl font-bold">👤 Индивидуальные занятия</h2>
-                                        <button onClick={() => openModal('individual')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm">
-                                            <Plus />Добавить
-                                        </button>
-                                    </div>
-                                    {individual.length === 0 ? (
-                                        <div className="text-center py-8 text-slate-400">
-                                            Нет индивидуальных занятий. Нажмите "Добавить".
-                                        </div>
-                                    ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-sm">
-                                                <thead>
-                                                    <tr className="border-b border-slate-700">
-                                                        <th className="text-left py-2 px-2">Дата</th>
-                                                        <th className="text-left py-2 px-2">Клиент</th>
-                                                        <th className="text-left py-2 px-2">Локация</th>
-                                                        <th className="text-right py-2 px-2">Часов</th>
-                                                        <th className="text-right py-2 px-2">Ставка</th>
-                                                        <th className="text-right py-2 px-2">Доход</th>
-                                                        <th className="text-center py-2 px-2">Действия</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {individual.map((row, idx) => (
-                                                        <tr key={idx} className="border-b border-slate-700/50">
-                                                            <td className="py-2 px-2">{row.date}</td>
-                                                            <td className="py-2 px-2">{row.client}</td>
-                                                            <td className="py-2 px-2">{row.location}</td>
-                                                            <td className="text-right py-2 px-2">{row.hours}</td>
-                                                            <td className="text-right py-2 px-2">{formatNumber(row.rate)}₽</td>
-                                                            <td className="text-right py-2 px-2 text-green-400 font-semibold">{formatNumber(row.income)}₽</td>
-                                                            <td className="py-2 px-2">
-                                                                <div className="flex gap-2 justify-center">
-                                                                    <button onClick={() => openModal('individual', idx)} className="text-blue-400">
-                                                                        <Edit />
-                                                                    </button>
-                                                                    <button onClick={() => deleteItem('individual', idx)} className="text-red-400">
-                                                                        <Trash />
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                                <tfoot className="bg-slate-900/50">
-                                                    <tr className="font-bold">
-                                                        <td colSpan="5" className="py-2 px-2">ИТОГО:</td>
-                                                        <td className="text-right py-2 px-2 text-green-400">{formatNumber(totalIndividual)}₽</td>
-                                                        <td></td>
-                                                    </tr>
-                                                </tfoot>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+/* Modal form for monthly record */
+function addMonthlyForm(existing){
+  const box = document.createElement('div');
+  box.innerHTML = `<h3>${existing ? 'Редактировать запись' : 'Новая запись'}</h3>`;
+  const form = document.createElement('div');
+  form.innerHTML = `
+    <label>Дата</label><input id="f-date" type="date" value="${existing?existing.date:''}" />
+    <label>Категория</label>
+    <select id="f-category"><option>Московское долголетие</option><option>Индивидуальные уроки</option><option>Аренда зала</option><option>Пассивный</option><option>Прочее</option></select>
+    <label>Локация / Клуб</label><input id="f-location" type="text" value="${existing?existing.location:''}" />
+    <label>Тип</label><input id="f-type" type="text" value="${existing?existing.type:''}" />
+    <label>Педагог</label><input id="f-teacher" type="text" value="${existing?existing.teacher:''}" />
+    <label>Человек (кол-во)</label><input id="f-people" type="number" value="${existing?existing.people:0}" />
+    <label>Выручка (₽)</label><input id="f-income" type="number" value="${existing?existing.income:0}" />
+    <label>Прочие расходы (₽)</label><input id="f-expense" type="number" value="${existing?existing.expense:0}" />
+    <label>Расход за зал (₽)</label><input id="f-hall" type="number" value="${existing?existing.hallExpense:0}" />
+    <label>Примечание</label><input id="f-note" type="text" value="${existing?existing.note:''}" />
+  `;
+  box.appendChild(form);
+  const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='8px';
+  const save = el('button','Сохранить','btn'); save.onclick = ()=>{
+    const rec = {
+      id: existing? existing.id : genId(),
+      date: document.getElementById('f-date').value || new Date().toISOString().slice(0,10),
+      category: document.getElementById('f-category').value,
+      location: document.getElementById('f-location').value,
+      club: document.getElementById('f-location').value,
+      type: document.getElementById('f-type').value,
+      teacher: document.getElementById('f-teacher').value,
+      people: Number(document.getElementById('f-people').value||0),
+      income: Number(document.getElementById('f-income').value||0),
+      expense: Number(document.getElementById('f-expense').value||0),
+      hallExpense: Number(document.getElementById('f-hall').value||0),
+      note: document.getElementById('f-note').value||''
+    };
+    rec.profit = rec.income - rec.expense - rec.hallExpense;
+    if(existing){
+      const idx = state.monthlyData.findIndex(x=>x.id===existing.id);
+      state.monthlyData[idx] = rec;
+    } else state.monthlyData.push(rec);
+    saveState(); closeModal(); renderContent();
+  };
+  const cancel = el('button','Отмена','btn ghost'); cancel.onclick = ()=> closeModal();
+  actions.appendChild(save); actions.appendChild(cancel); box.appendChild(actions);
+  return box;
+}
 
-                            {activeTab === 'students' && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-xl font-bold">👥 База учеников</h2>
-                                        <button onClick={() => openModal('students')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm">
-                                            <Plus />Добавить
-                                        </button>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                                        <div className="bg-slate-900/50 p-4 rounded-lg">
-                                            <div className="text-slate-400 text-sm">Всего учеников</div>
-                                            <div className="text-2xl font-bold text-blue-400">{totalStudents}</div>
-                                        </div>
-                                        <div className="bg-slate-900/50 p-4 rounded-lg">
-                                            <div className="text-slate-400 text-sm">Активные</div>
-                                            <div className="text-2xl font-bold text-green-400">{activeStudents}</div>
-                                        </div>
-                                        <div className="bg-slate-900/50 p-4 rounded-lg">
-                                            <div className="text-slate-400 text-sm">Средний доход</div>
-                                            <div className="text-2xl font-bold text-yellow-400">{formatNumber(avgIncomePerStudent)}₽</div>
-                                        </div>
-                                    </div>
-                                    
-                                    {students.length === 0 ? (
-                                        <div className="text-center py-8 text-slate-400">
-                                            Нет учеников. Нажмите "Добавить" чтобы начать.
-                                        </div>
-                                    ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-sm">
-                                                <thead>
-                                                    <tr className="border-b border-slate-700">
-                                                        <th className="text-left py-2 px-2">Имя</th>
-                                                        <th className="text-left py-2 px-2">Телефон</th>
-                                                        <th className="text-left py-2 px-2">Группа</th>
-                                                        <th className="text-left py-2 px-2">Абонемент</th>
-                                                        <th className="text-left py-2 px-2">До</th>
-                                                        <th className="text-left py-2 px-2">Статус</th>
-                                                        <th className="text-center py-2 px-2">Действия</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {students.map((student, idx) => (
-                                                        <tr key={idx} className="border-b border-slate-700/50">
-                                                            <td className="py-2 px-2">{student.name}</td>
-                                                            <td className="py-2 px-2">{student.phone}</td>
-                                                            <td className="py-2 px-2">{student.group}</td>
-                                                            <td className="py-2 px-2">{student.subscription}</td>
-                                                            <td className="py-2 px-2">{student.expiryDate}</td>
-                                                            <td className="py-2 px-2">
-                                                                <span className={`px-2 py-1 rounded text-xs ${
-                                                                    student.status === 'Активный' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
-                                                                }`}>
-                                                                    {student.status}
-                                                                </span>
-                                                            </td>
-                                                            <td className="py-2 px-2">
-                                                                <div className="flex gap-2 justify-center">
-                                                                    <button onClick={() => openModal('students', idx)} className="text-blue-400">
-                                                                        <Edit />
-                                                                    </button>
-                                                                    <button onClick={() => deleteItem('students', idx)} className="text-red-400">
-                                                                        <Trash />
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+/* Location detail modal */
+function locationDetail(location){
+  const items = state.monthlyData.filter(r=>r.location===location);
+  const box = document.createElement('div'); box.className='box';
+  box.innerHTML = `<h3>Детали — ${location}</h3>`;
+  const totals = items.reduce((s,i)=>{ s.inc+=i.income; s.hall+=i.hallExpense; s.exp+=i.expense; s.prof+=i.profit; return s; }, {inc:0,hall:0,exp:0,prof:0});
+  const info = document.createElement('div'); info.className='card-row';
+  ['Доход','Аренда','Прочие','Прибыль'].forEach((t,i)=>{ const c=document.createElement('div'); c.className='card'; c.innerHTML=`<div class="muted">${t}</div><div style="font-weight:700">${[fmt(totals.inc),fmt(totals.hall),fmt(totals.exp),fmt(totals.prof)][i]} ₽</div>`; info.appendChild(c); });
+  box.appendChild(info);
+  const tbl = document.createElement('table'); tbl.innerHTML = '<thead><tr><th>Дата</th><th>Педагог</th><th>Выручка</th><th>Аренда</th><th>Прочие</th><th>Прибыль</th><th></th></tr></thead><tbody></tbody>';
+  const tb = tbl.querySelector('tbody');
+  items.forEach(it=>{ const tr=document.createElement('tr'); tr.innerHTML = `<td>${it.date}</td><td>${it.teacher}</td><td>${fmt(it.income)}</td><td><input type="number" value="${it.hallExpense}" data-id="${it.id}" style="width:110px" /></td><td>${fmt(it.expense)}</td><td>${fmt(it.profit)}</td><td><button class="small btn" data-save="${it.id}">Сохранить</button></td>`; tb.appendChild(tr); });
+  box.appendChild(tbl);
+  const close = el('button','Закрыть','btn ghost'); close.onclick = ()=> closeModal(); box.appendChild(close);
 
-                            {activeTab === 'analytics' && (
-                                <div>
-                                    <h2 className="text-xl font-bold mb-4">📊 Аналитика и KPI</h2>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
-                                            <h3 className="text-lg font-bold mb-4 text-green-400">💰 Финансы</h3>
-                                            <div className="space-y-3">
-                                                <div className="flex justify-between">
-                                                    <span className="text-slate-300">Текущий доход (месяц):</span>
-                                                    <span className="font-semibold text-green-400">{formatNumber(totalMonthlyProfit + totalIndividual + totalPassive)}₽</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-slate-300">Чистая прибыль:</span>
-                                                    <span className="font-semibold text-blue-400">{formatNumber(totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses)}₽</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-slate-300">Рентабельность:</span>
-                                                    <span className="font-semibold text-yellow-400">
-                                                        {totalMonthlyIncome > 0 ? Math.round(((totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses) / (totalMonthlyIncome + totalIndividual + totalPassive)) * 100) : 0}%
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
+  // handle inline save
+  setTimeout(()=>{ tbl.addEventListener('click', e=>{ const id = e.target.getAttribute('data-save'); if(id){ const input = tbl.querySelector('input[data-id="'+id+'"]'); const val = Number(input.value||0); const idx = state.monthlyData.findIndex(x=>x.id===id); if(idx>=0){ state.monthlyData[idx].hallExpense = val; state.monthlyData[idx].profit = state.monthlyData[idx].income - state.monthlyData[idx].expense - val; saveState(); closeModal(); renderContent(); openModal(locationDetail(location)); } } }); },50);
 
-                                        <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
-                                            <h3 className="text-lg font-bold mb-4 text-blue-400">👥 Ученики</h3>
-                                            <div className="space-y-3">
-                                                <div className="flex justify-between">
-                                                    <span className="text-slate-300">Всего учеников:</span>
-                                                    <span className="font-semibold">{totalStudents}</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-slate-300">Активных:</span>
-                                                    <span className="font-semibold text-green-400">{activeStudents}</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-slate-300">Средний доход с ученика:</span>
-                                                    <span className="font-semibold text-yellow-400">{formatNumber(avgIncomePerStudent)}₽</span>
-                                                </div>
-                                            </div>
-                                        </div>
+  const wrapper = document.createElement('div'); wrapper.className='box'; wrapper.appendChild(box);
+  return wrapper;
+}
 
-                                        <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
-                                            <h3 className="text-lg font-bold mb-4 text-purple-400">🎯 Цели</h3>
-                                            <div className="space-y-3">
-                                                <div className="flex justify-between">
-                                                    <span className="text-slate-300">Текущий: 385,000₽</span>
-                                                    <span className="font-semibold">→</span>
-                                                    <span className="text-slate-300">Цель: 1,000,000₽</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-slate-300">Осталось:</span>
-                                                    <span className="font-semibold text-red-400">{formatNumber(1000000 - (totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses))}₽</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-slate-300">Прогресс:</span>
-                                                    <span className="font-semibold text-blue-400">{progressToGoal}%</span>
-                                                </div>
-                                            </div>
-                                        </div>
+/* Analytics */
+function renderAnalytics(){
+  const box = document.createElement('div'); box.innerHTML = '<h3>Аналитика</h3>';
+  const totalIncome = state.monthlyData.reduce((s,i)=>s+i.income,0) + state.individual.reduce((s,i)=>s+i.income,0) + state.passive.reduce((s,p)=>s+p.monthly,0);
+  const totalHall = state.monthlyData.reduce((s,i)=>s+i.hallExpense,0);
+  const fixed = state.expenses.reduce((s,i)=>s+i.amount,0);
+  const totalProfit = totalIncome - (totalHall + fixed);
+  const summary = document.createElement('div'); summary.className='card-row';
+  [['Общий доход',fmt(totalIncome)],['Аренда (итого)',fmt(totalHall)],['Пост. расходы',fmt(fixed)],['Прибыль (прибл.)',fmt(totalProfit)]].forEach(i=>{ const c=document.createElement('div'); c.className='card'; c.innerHTML=`<div class="muted">${i[0]}</div><div style="font-weight:700">${i[1]} ₽</div>`; summary.appendChild(c); });
+  box.appendChild(summary);
 
-                                        <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
-                                            <h3 className="text-lg font-bold mb-4 text-orange-400">📈 Рост</h3>
-                                            <div className="space-y-3">
-                                                <div>
-                                                    <div className="text-slate-300 text-sm mb-1">Чтобы достичь 1М нужно:</div>
-                                                    <div className="text-xs text-slate-400">
-                                                        • Увеличить доход на {formatNumber(Math.round((1000000 - (totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses)) / 12))}₽/мес
-                                                    </div>
-                                                    <div className="text-xs text-slate-400 mt-1">
-                                                        • Или привлечь еще ~{Math.round((1000000 - (totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses)) / (avgIncomePerStudent || 3000))} учеников
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+  // teachers ranking
+  const tmap = {};
+  state.monthlyData.forEach(r=>{ const t = r.teacher||'Без имени'; if(!tmap[t]) tmap[t]={teacher:t,groupIncome:0,hall:0,profit:0}; tmap[t].groupIncome+=r.income; tmap[t].hall+=r.hallExpense; tmap[t].profit+=r.profit; });
+  state.individual.forEach(r=>{ const t=r.teacher||'Без имени'; if(!tmap[t]) tmap[t]={teacher:t,groupIncome:0,hall:0,profit:0,ind:0}; tmap[t].ind=(tmap[t].ind||0)+r.income; });
+  const teachers = Object.values(tmap).map(x=>({name:x.teacher, income:(x.groupIncome||0)+(x.ind||0), hall:(x.hall||0), net: ((x.groupIncome||0)+(x.ind||0))-(x.hall||0) })).sort((a,b)=>b.income-a.income);
+  const ttable = document.createElement('table'); ttable.innerHTML = '<thead><tr><th>#</th><th>Педагог</th><th>Доход</th><th>Аренда</th><th>Чистая прибыль</th></tr></thead><tbody></tbody>';
+  teachers.slice(0,20).forEach((t,i)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${t.name}</td><td>${fmt(t.income)}</td><td>${fmt(t.hall)}</td><td>${fmt(t.net)}</td>`; ttable.querySelector('tbody').appendChild(tr); });
+  box.appendChild(document.createElement('h4')).textContent='Рейтинг педагогов (по доходу)'; box.appendChild(ttable);
 
-                                    <div className="mt-6 bg-gradient-to-r from-blue-900/50 to-purple-900/50 p-6 rounded-lg border-2 border-blue-600">
-                                        <h3 className="text-xl font-bold mb-2">🎉 Промежуточные цели</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                                            <div className="text-center">
-                                                <div className="text-2xl font-bold text-green-400">500,000₽</div>
-                                                <div className="text-sm text-slate-400">Первая цель</div>
-                                            </div>
-                                            <div className="text-center">
-                                                <div className="text-2xl font-bold text-yellow-400">750,000₽</div>
-                                                <div className="text-sm text-slate-400">Вторая цель</div>
-                                            </div>
-                                            <div className="text-center">
-                                                <div className="text-2xl font-bold text-blue-400">1,000,000₽</div>
-                                                <div className="text-sm text-slate-400">Финальная цель</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+  // locations
+  const lmap = {};
+  state.monthlyData.forEach(r=>{ const l = r.club || r.location || 'Без локации'; if(!lmap[l]) lmap[l]={club:l,income:0,hall:0,profit:0}; lmap[l].income+=r.income; lmap[l].hall+=r.hallExpense; lmap[l].profit+=r.profit; });
+  const clubs = Object.values(lmap).sort((a,b)=>b.income-a.income);
+  const ltable = document.createElement('table'); ltable.innerHTML = '<thead><tr><th>#</th><th>Клуб</th><th>Доход</th><th>Аренда</th><th>Чистая прибыль</th></tr></thead><tbody></tbody>';
+  clubs.slice(0,20).forEach((c,i)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${c.club}</td><td>${fmt(c.income)}</td><td>${fmt(c.hall)}</td><td>${fmt(c.profit)}</td>`; ltable.querySelector('tbody').appendChild(tr); });
+  box.appendChild(document.createElement('h4')).textContent='Рейтинг локаций'; box.appendChild(ltable);
 
-                            {activeTab === 'summary' && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-xl font-bold">📊 Сводка за месяц</h2>
-                                        <button onClick={exportSummaryToCSV} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 px-3 py-2 rounded text-sm">
-                                            <Download />Экспорт CSV
-                                        </button>
-                                    </div>
-                                    <div className="space-y-3">
-                                        <div className="flex justify-between p-3 bg-slate-900/50 rounded">
-                                            <span>Месячный отчёт (доход):</span>
-                                            <span className="font-bold text-green-400">{formatNumber(totalMonthlyIncome)}₽</span>
-                                        </div>
-                                        <div className="flex justify-between p-3 bg-slate-900/50 rounded">
-                                            <span>Месячный отчёт (расход):</span>
-                                            <span className="font-bold text-red-400">-{formatNumber(totalMonthlyExpense)}₽</span>
-                                        </div>
-                                        <div className="flex justify-between p-3 bg-slate-900/50 rounded">
-                                            <span>Индивидуальные занятия:</span>
-                                            <span className="font-bold text-green-400">{formatNumber(totalIndividual)}₽</span>
-                                        </div>
-                                        <div className="flex justify-between p-3 bg-slate-900/50 rounded">
-                                            <span>Пассивный доход:</span>
-                                            <span className="font-bold text-green-400">{formatNumber(totalPassive)}₽</span>
-                                        </div>
-                                        <div className="flex justify-between p-3 bg-slate-900/50 rounded">
-                                            <span>Постоянные расходы:</span>
-                                            <span className="font-bold text-red-400">-{formatNumber(totalExpenses)}₽</span>
-                                        </div>
-                                        <div className="flex justify-between p-4 bg-blue-900/50 rounded border-2 border-blue-600 mt-4">
-                                            <span className="text-lg font-bold">ЧИСТАЯ ПРИБЫЛЬ:</span>
-                                            <span className="text-xl font-bold text-blue-400">{formatNumber(totalMonthlyProfit + totalIndividual + totalPassive - totalExpenses)}₽</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+  content.appendChild(box);
+}
 
-                            {activeTab === 'results' && (
-                                <div>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-xl font-bold">📅 Результаты по месяцам</h2>
-                                        <button onClick={() => openModal('results')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm">
-                                            <Plus />Добавить месяц
-                                        </button>
-                                    </div>
-                                    {monthlyResults.length === 0 ? (
-                                        <div className="text-center py-8 text-slate-400">
-                                            Нет результатов. Нажмите "Добавить месяц" чтобы внести итоги.
-                                        </div>
-                                    ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-sm">
-                                                <thead>
-                                                    <tr className="border-b border-slate-700">
-                                                        <th className="text-left py-2 px-2">Месяц</th>
-                                                        <th className="text-right py-2 px-2">Групповые</th>
-                                                        <th className="text-right py-2 px-2">Индивид.</th>
-                                                        <th className="text-right py-2 px-2">Пассивный</th>
-                                                        <th className="text-right py-2 px-2">Расходы</th>
-                                                        <th className="text-right py-2 px-2">Прибыль</th>
-                                                        <th className="text-center py-2 px-2">Действия</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {monthlyResults.map((row, idx) => (
-                                                        <tr key={idx} className="border-b border-slate-700/50">
-                                                            <td className="py-2 px-2">{row.month} {row.year}</td>
-                                                            <td className="text-right py-2 px-2 text-green-400">{formatNumber(row.groupIncome)}₽</td>
-                                                            <td className="text-right py-2 px-2 text-green-400">{formatNumber(row.individualIncome)}₽</td>
-                                                            <td className="text-right py-2 px-2 text-green-400">{formatNumber(row.passiveIncome)}₽</td>
-                                                            <td className="text-right py-2 px-2 text-red-400">{formatNumber(row.expenses)}₽</td>
-                                                            <td className="text-right py-2 px-2 text-blue-400 font-bold">{formatNumber(row.profit)}₽</td>
-                                                            <td className="py-2 px-2">
-                                                                <div className="flex gap-2 justify-center">
-                                                                    <button onClick={() => openModal('results', idx)} className="text-blue-400">
-                                                                        <Edit />
-                                                                    </button>
-                                                                    <button onClick={() => deleteItem('results', idx)} className="text-red-400">
-                                                                        <Trash />
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                                <tfoot className="bg-slate-900/50">
-                                                    <tr className="font-bold">
-                                                        <td className="py-2 px-2">ИТОГО:</td>
-                                                        <td className="text-right py-2 px-2 text-green-400">{formatNumber(monthlyResults.reduce((sum, r) => sum + r.groupIncome, 0))}₽</td>
-                                                        <td className="text-right py-2 px-2 text-green-400">{formatNumber(monthlyResults.reduce((sum, r) => sum + r.individualIncome, 0))}₽</td>
-                                                        <td className="text-right py-2 px-2 text-green-400">{formatNumber(monthlyResults.reduce((sum, r) => sum + r.passiveIncome, 0))}₽</td>
-                                                        <td className="text-right py-2 px-2 text-red-400">{formatNumber(monthlyResults.reduce((sum, r) => sum + r.expenses, 0))}₽</td>
-                                                        <td className="text-right py-2 px-2 text-blue-400">{formatNumber(monthlyResults.reduce((sum, r) => sum + r.profit, 0))}₽</td>
-                                                        <td></td>
-                                                    </tr>
-                                                </tfoot>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
+/* Students */
+function renderStudents(){
+  const box = document.createElement('div'); box.innerHTML = '<h3>База учеников</h3>';
+  const add = el('button','Новый ученик','btn'); add.onclick = ()=> openModal(studentForm());
+  box.appendChild(add);
+  const tbl = document.createElement('table'); tbl.innerHTML = '<thead><tr><th>Имя</th><th>Телефон</th><th>Группы</th><th></th></tr></thead><tbody></tbody>';
+  state.students.forEach(s=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${s.name}</td><td>${s.phone||''}</td><td>${(s.groups||[]).join(', ')}</td><td><button class="small btn ghost" data-edit="${s.id}">Ред.</button> <button class="small btn" data-del="${s.id}">Удалить</button></td>`; tbl.querySelector('tbody').appendChild(tr); });
+  tbl.addEventListener('click', e=>{ const id=e.target.getAttribute('data-edit'); const del=e.target.getAttribute('data-del'); if(id){ const s=state.students.find(x=>x.id===id); openModal(studentForm(s)); } if(del){ if(confirm('Удалить?')){ state.students=state.students.filter(x=>x.id!==del); saveState(); renderContent(); } } });
+  box.appendChild(tbl); content.appendChild(box);
+}
+function studentForm(existing){
+  const box = document.createElement('div'); box.innerHTML = `<h3>${existing?'Редактировать':'Новый'} ученик</h3>
+    <label>Имя</label><input id="s-name" value="${existing?existing.name:''}" />
+    <label>Телефон</label><input id="s-phone" value="${existing?existing.phone:''}" />
+    <label>Группы (через запятую)</label><input id="s-groups" value="${existing?(existing.groups||[]).join(', '):''}" />`;
+  const save = el('button','Сохранить','btn'); save.onclick = ()=>{ const name=document.getElementById('s-name').value.trim(); if(!name){ alert('Введите имя'); return; } const phone=document.getElementById('s-phone').value.trim(); const groups=document.getElementById('s-groups').value.split(',').map(x=>x.trim()).filter(Boolean); if(existing){ const idx=state.students.findIndex(x=>x.id===existing.id); state.students[idx]={...existing,name,phone,groups}; } else state.students.push({id:genId(),name,phone,groups}); saveState(); closeModal(); renderContent(); };
+  const cancel = el('button','Отмена','btn ghost'); cancel.onclick = ()=> closeModal();
+  box.appendChild(save); box.appendChild(cancel);
+  return box;
+}
 
-                    {showModal && (
-                        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50" onClick={() => setShowModal(false)}>
-                            <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full max-h-screen overflow-y-auto border border-slate-700" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-xl font-bold">{editingIndex !== null ? 'Редактировать' : 'Добавить'}</h3>
-                                    <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white">
-                                        <X />
-                                    </button>
-                                </div>
+/* By months (manual + autofill) */
+function renderByMonths(){
+  const box = document.createElement('div'); box.innerHTML = '<h3>По месяцам</h3><div class="muted">Создать итог по месяцу — можно автозаполнить.</div>';
+  const add = el('button','Создать отчёт по месяцу','btn'); add.onclick = ()=> openModal(monthResultForm());
+  box.appendChild(add);
+  const tbl = document.createElement('table'); tbl.innerHTML = '<thead><tr><th>Месяц</th><th>Группы (М.Д.)</th><th>Индив.</th><th>Пассив.</th><th>Аренда</th><th>Пост.расх.</th><th>Доход</th><th>Расход</th><th>Прибыль</th></tr></thead><tbody></tbody>';
+  state.monthlyResults.forEach(m=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${m.month} ${m.year}</td><td>${fmt(m.group_MoscowDolgoletie)}</td><td>${fmt(m.individual)}</td><td>${fmt(m.passive)}</td><td>${fmt(m.hall_rent_expense)}</td><td>${fmt(m.expenses_fixed)}</td><td>${fmt(m.totalIncome)}</td><td>${fmt(m.totalExpenses)}</td><td>${fmt(m.profit)}</td>`; tbl.querySelector('tbody').appendChild(tr); });
+  box.appendChild(tbl); content.appendChild(box);
+}
+function monthResultForm(existing){
+  const box = document.createElement('div'); box.innerHTML = `<h3>${existing?'Редактировать':'Новый'} месячный итог</h3>
+    <label>Месяц (YYYY-MM)</label><input id="mr-month" placeholder="2025-05" value="${existing? (existing.year+'-'+String((new Date(existing.month+' 1').getMonth()+1)).padStart(2,'0')) : ''}" />
+    <label>Группы (Московское долголетие)</label><input id="mr-group" value="${existing?existing.group_MoscowDolgoletie:0}" />
+    <label>Индивидуальные</label><input id="mr-ind" value="${existing?existing.individual:0}" />
+    <label>Пассивный</label><input id="mr-pass" value="${existing?existing.passive:0}" />
+    <label>Аренда (расход)</label><input id="mr-hall" value="${existing?existing.hall_rent_expense:0}" />
+    <label>Постоянные расходы</label><input id="mr-exp" value="${existing?existing.expenses_fixed:0}" />
+  `;
+  const autofill = el('button','Автозаполнить по данным','btn ghost'); autofill.onclick = ()=> {
+    const mm = document.getElementById('mr-month').value.trim();
+    if(!/^\d{4}-\d{2}$/.test(mm)){ alert('Месяц как YYYY-MM'); return; }
+    const res = autofillMonth(mm);
+    document.getElementById('mr-group').value = res.group_MoscowDolgoletie;
+    document.getElementById('mr-ind').value = res.individual;
+    document.getElementById('mr-pass').value = res.passive;
+    document.getElementById('mr-hall').value = res.hall_rent_expense;
+    document.getElementById('mr-exp').value = res.expenses_fixed;
+  };
+  box.appendChild(autofill);
+  const save = el('button','Сохранить','btn'); save.onclick = ()=> {
+    const mm = document.getElementById('mr-month').value.trim();
+    if(!/^\d{4}-\d{2}$/.test(mm)){ alert('Месяц как YYYY-MM'); return; }
+    const [year,mon] = mm.split('-');
+    const group = Number(document.getElementById('mr-group').value||0);
+    const ind = Number(document.getElementById('mr-ind').value||0);
+    const pass = Number(document.getElementById('mr-pass').value||0);
+    const hall = Number(document.getElementById('mr-hall').value||0);
+    const exp = Number(document.getElementById('mr-exp').value||0);
+    const totalIncome = group + ind + pass;
+    const totalExpenses = hall + exp;
+    const profit = totalIncome - totalExpenses;
+    const obj = { id: existing?existing.id:genId(), month: monthName(mon), year:Number(year), group_MoscowDolgoletie:group, individual:ind, passive:pass, hall_rent_expense:hall, expenses_fixed:exp, totalIncome, totalExpenses, profit, note:'' };
+    if(existing){ const idx = state.monthlyResults.findIndex(x=>x.id===existing.id); state.monthlyResults[idx]=obj; } else state.monthlyResults.push(obj);
+    saveState(); closeModal(); renderContent();
+  };
+  const cancel = el('button','Отмена','btn ghost'); cancel.onclick = ()=> closeModal();
+  box.appendChild(save); box.appendChild(cancel);
+  return box;
+}
+function autofillMonth(yyyymm){
+  const period = r => r.date && r.date.indexOf(yyyymm)===0;
+  const group = state.monthlyData.filter(r=>r.category==='Московское долголетие' && period(r)).reduce((s,i)=>s+i.income,0);
+  const individual = state.individual.filter(r=>r.date && r.date.indexOf(yyyymm)===0).reduce((s,i)=>s+i.income,0);
+  const passive = state.passive.reduce((s,p)=>s+p.monthly,0);
+  const hall = state.monthlyData.filter(r=>period(r)).reduce((s,i)=>s+i.hallExpense,0);
+  const exp = state.expenses.filter(r=>r.date && r.date.indexOf(yyyymm)===0).reduce((s,i)=>s+i.amount,0);
+  return { group_MoscowDolgoletie:group, individual, passive, hall_rent_expense:hall, expenses_fixed:exp };
+}
 
-                                <div className="space-y-3">
-                                    {modalType === 'monthly' && (
-                                        <>
-                                            <input
-                                                type="text"
-                                                placeholder="Дата (например: 06.12)"
-                                                value={formData.date || ''}
-                                                onChange={(e) => setFormData({...formData, date: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <select
-                                                value={formData.location || ''}
-                                                onChange={(e) => setFormData({...formData, location: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            >
-                                                <option value="">Выберите локацию</option>
-                                                {locations.map((loc, idx) => (
-                                                    <option key={idx} value={loc}>{loc}</option>
-                                                ))}
-                                            </select>
-                                            <input
-                                                type="text"
-                                                placeholder="Тип занятия"
-                                                value={formData.type || ''}
-                                                onChange={(e) => setFormData({...formData, type: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="text"
-                                                placeholder="Педагог"
-                                                value={formData.teacher || ''}
-                                                onChange={(e) => setFormData({...formData, teacher: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                placeholder="Количество людей"
-                                                value={formData.people || ''}
-                                                onChange={(e) => setFormData({...formData, people: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                placeholder="Доход (₽)"
-                                                value={formData.income || ''}
-                                                onChange={(e) => setFormData({...formData, income: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                placeholder="Расход (₽)"
-                                                value={formData.expense || ''}
-                                                onChange={(e) => setFormData({...formData, expense: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="text"
-                                                placeholder="Примечание (необязательно)"
-                                                value={formData.note || ''}
-                                                onChange={(e) => setFormData({...formData, note: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                        </>
-                                    )}
+/* Settings */
+function renderSettings(){
+  const box = document.createElement('div'); box.innerHTML = '<h3>Настройки</h3><div class="muted">Восстановить примерные данные / очистить.</div>';
+  const restore = el('button','Загрузить примерные данные','btn ghost'); restore.onclick = ()=> { if(confirm('Заменить данные примерными?')){ state = JSON.parse(JSON.stringify(DEFAULT)); saveState(); renderContent(); } };
+  const clear = el('button','Очистить всё','btn danger'); clear.onclick = ()=> { if(confirm('Очистить всё?')){ state={monthlyData:[],individual:[],expenses:[],passive:[],monthlyResults:[],students:[]}; saveState(); renderContent(); } };
+  box.appendChild(restore); box.appendChild(clear); content.appendChild(box);
+}
 
-                                    {modalType === 'expenses' && (
-                                        <>
-                                            <input
-                                                type="text"
-                                                placeholder="Название расхода"
-                                                value={formData.item || ''}
-                                                onChange={(e) => setFormData({...formData, item: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                placeholder="Сумма (₽)"
-                                                value={formData.amount || ''}
-                                                onChange={(e) => setFormData({...formData, amount: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="text"
-                                                placeholder="Комментарий (необязательно)"
-                                                value={formData.comment || ''}
-                                                onChange={(e) => setFormData({...formData, comment: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                        </>
-                                    )}
+/* Import form */
+function importForm(){
+  const box = document.createElement('div'); box.className='box';
+  box.innerHTML = '<h3>Импорт JSON</h3><div class="muted">Вставьте JSON (finData) и нажмите Импортировать.</div>';
+  const ta = document.createElement('textarea'); ta.style.width='100%'; ta.style.height='220px';
+  box.appendChild(ta);
+  const imp = el('button','Импортировать','btn'); imp.onclick = ()=> { try{ const parsed = JSON.parse(ta.value); state = parsed; saveState(); closeModal(); renderContent(); } catch(e){ alert('Ошибка JSON: '+e.message); } };
+  const cancel = el('button','Отмена','btn ghost'); cancel.onclick = ()=> closeModal();
+  box.appendChild(imp); box.appendChild(cancel);
+  return box;
+}
 
-                                    {modalType === 'passive' && (
-                                        <>
-                                            <input
-                                                type="text"
-                                                placeholder="Источник дохода"
-                                                value={formData.source || ''}
-                                                onChange={(e) => setFormData({...formData, source: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                placeholder="Сумма в месяц (₽)"
-                                                value={formData.monthly || ''}
-                                                onChange={(e) => setFormData({...formData, monthly: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                placeholder="Капитал (₽, необязательно)"
-                                                value={formData.capital || ''}
-                                                onChange={(e) => setFormData({...formData, capital: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                placeholder="Ставка % (необязательно)"
-                                                value={formData.rate || ''}
-                                                onChange={(e) => setFormData({...formData, rate: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                        </>
-                                    )}
+/* Export CSV (monthlyData) */
+function exportCSV(){
+  const hdr = ['date,category,location,club,type,teacher,people,income,expense,hallExpense,profit,note'];
+  const rows = state.monthlyData.map(r => [r.date,r.category,`"${r.location}"`,`"${r.club}"`,r.type,r.teacher,r.people,r.income,r.expense,r.hallExpense,r.profit,`"${(r.note||'').replace(/"/g,'""')}"`].join(','));
+  const csv = hdr.concat(rows).join('\n');
+  downloadFile('monthlyData.csv', csv);
+}
 
-                                    {modalType === 'individual' && (
-                                        <>
-                                            <input
-                                                type="text"
-                                                placeholder="Дата (например: 06.12)"
-                                                value={formData.date || ''}
-                                                onChange={(e) => setFormData({...formData, date: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="text"
-                                                placeholder="Имя клиента"
-                                                value={formData.client || ''}
-                                                onChange={(e) => setFormData({...formData, client: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="text"
-                                                placeholder="Локация"
-                                                value={formData.location || ''}
-                                                onChange={(e) => setFormData({...formData, location: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                step="0.5"
-                                                placeholder="Количество часов"
-                                                value={formData.hours || ''}
-                                                onChange={(e) => setFormData({...formData, hours: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                placeholder="Ставка за час (₽)"
-                                                value={formData.rate || ''}
-                                                onChange={(e) => setFormData({...formData, rate: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="text"
-                                                placeholder="Примечание (необязательно)"
-                                                value={formData.note || ''}
-                                                onChange={(e) => setFormData({...formData, note: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                        </>
-                                    )}
+/* Modal helpers */
+function openModal(el){ modalRoot.innerHTML=''; const m=document.createElement('div'); m.className='modal'; const box=document.createElement('div'); box.className='box'; box.appendChild(el); m.appendChild(box); modalRoot.appendChild(m); m.onclick = e=>{ if(e.target===m) closeModal(); }; }
+function closeModal(){ modalRoot.innerHTML=''; }
 
-                                    {modalType === 'results' && (
-                                        <>
-                                            <select
-                                                value={formData.month || ''}
-                                                onChange={(e) => setFormData({...formData, month: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            >
-                                                <option value="">Выберите месяц</option>
-                                                <option value="Январь">Январь</option>
-                                                <option value="Февраль">Февраль</option>
-                                                <option value="Март">Март</option>
-                                                <option value="Апрель">Апрель</option>
-                                                <option value="Май">Май</option>
-                                                <option value="Июнь">Июнь</option>
-                                                <option value="Июль">Июль</option>
-                                                <option value="Август">Август</option>
-                                                <option value="Сентябрь">Сентябрь</option>
-                                                <option value="Октябрь">Октябрь</option>
-                                                <option value="Ноябрь">Ноябрь</option>
-                                                <option value="Декабрь">Декабрь</option>
-                                            </select>
-                                            <input
-                                                type="number"
-                                                placeholder="Год (например: 2025)"
-                                                value={formData.year || ''}
-                                                onChange={(e) => setFormData({...formData, year: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                placeholder="Групповые занятия (₽)"
-                                                value={formData.groupIncome || ''}
-                                                onChange={(e) => setFormData({...formData, groupIncome: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                placeholder="Индивидуальные (₽)"
-                                                value={formData.individualIncome || ''}
-                                                onChange={(e) => setFormData({...formData, individualIncome: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                placeholder="Пассивный доход (₽)"
-                                                value={formData.passiveIncome || ''}
-                                                onChange={(e) => setFormData({...formData, passiveIncome: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="number"
-                                                placeholder="Расходы (₽)"
-                                                value={formData.expenses || ''}
-                                                onChange={(e) => setFormData({...formData, expenses: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="text"
-                                                placeholder="Примечание (необязательно)"
-                                                value={formData.note || ''}
-                                                onChange={(e) => setFormData({...formData, note: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                        </>
-                                    )}
+/* Utils */
+function el(tag, text='', cls=''){ const e=document.createElement(tag); if(text) e.textContent=text; if(cls) e.className=cls; return e; }
+function monthName(m){ const map={'01':'Январь','02':'Февраль','03':'Март','04':'Апрель','05':'Май','06':'Июнь','07':'Июль','08':'Август','09':'Сентябрь','10':'Октябрь','11':'Ноябрь','12':'Декабрь'}; return map[m]||m; }
 
-                                    {modalType === 'students' && (
-                                        <>
-                                            <input
-                                                type="text"
-                                                placeholder="Имя и фамилия"
-                                                value={formData.name || ''}
-                                                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="tel"
-                                                placeholder="Телефон (+7...)"
-                                                value={formData.phone || ''}
-                                                onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <select
-                                                value={formData.group || ''}
-                                                onChange={(e) => setFormData({...formData, group: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            >
-                                                <option value="">Выберите группу</option>
-                                                <option value="Долголетие Буденного">Долголетие Буденного</option>
-                                                <option value="Долголетие Черкизовская">Долголетие Черкизовская</option>
-                                                <option value="Латинский">Латинский</option>
-                                                <option value="Проам">Проам</option>
-                                                <option value="Внуково">Внуково</option>
-                                            </select>
-                                            <input
-                                                type="text"
-                                                placeholder="Абонемент (например: 8 занятий)"
-                                                value={formData.subscription || ''}
-                                                onChange={(e) => setFormData({...formData, subscription: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <input
-                                                type="date"
-                                                placeholder="Действует до"
-                                                value={formData.expiryDate || ''}
-                                                onChange={(e) => setFormData({...formData, expiryDate: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                            <select
-                                                value={formData.status || 'Активный'}
-                                                onChange={(e) => setFormData({...formData, status: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            >
-                                                <option value="Активный">Активный</option>
-                                                <option value="Неактивный">Неактивный</option>
-                                                <option value="Пробный">Пробный</option>
-                                            </select>
-                                            <input
-                                                type="text"
-                                                placeholder="Примечание (необязательно)"
-                                                value={formData.note || ''}
-                                                onChange={(e) => setFormData({...formData, note: e.target.value})}
-                                                className="w-full px-3 py-2 bg-slate-700 rounded border border-slate-600 text-white"
-                                            />
-                                        </>
-                                    )}
-
-                                    <div className="flex gap-2 mt-4">
-                                        <button onClick={saveData} className="flex-1 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-semibold">
-                                            Сохранить
-                                        </button>
-                                        <button onClick={() => setShowModal(false)} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded">
-                                            Отмена
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        ReactDOM.render(<FinanceTracker />, document.getElementById('root'));
-    </script>
+/* Save before unload */
+window.addEventListener('beforeunload', ()=> saveState());
+</script>
 </body>
-</html> 
+</html>
