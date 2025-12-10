@@ -391,4 +391,185 @@ function studentForm(existing){
 
 /*** По месяцам (monthlyResults) ***/
 function renderByMonths(content, toolbar){
- const box = document.create
+ const box = document.createElement('div');
+ box.innerHTML = '<h3>По месяцам</h3><div class="muted">Отчёты по месяцам (можно автозаполнить)</div>';
+ toolbar.appendChild(addBtn('Новый месячный результат', ()=> modal(monthlyResultForm())));
+ const tbl = document.createElement('table');
+ tbl.innerHTML = '<thead><tr><th>Месяц</th><th>Группы (М.Д.)</th><th>Индив</th><th>Пассив</th><th>Аренда</th><th>Пост.расх</th><th>Доход</th><th>Расход</th><th>Прибыль</th><th></th></tr></thead><tbody></tbody>';
+ const tbody = tbl.querySelector('tbody');
+ state.monthlyResults.forEach(m=>{
+   const tr = document.createElement('tr');
+   tr.innerHTML = `<td>${m.month} ${m.year||''}</td><td>${fmt(m.group_MoscowDolgoletie)}</td><td>${fmt(m.individual)}</td><td>${fmt(m.passive)}</td><td>${fmt(m.hall_rent_expense)}</td><td>${fmt(m.expenses_fixed)}</td><td>${fmt(m.totalIncome)}</td><td>${fmt(m.totalExpenses)}</td><td>${fmt(m.profit)}</td><td><button class="small" data-del="${m.id}">Del</button></td>`;
+   tbody.appendChild(tr);
+ });
+ tbl.addEventListener('click', e=>{
+   const del = e.target.getAttribute('data-del');
+   if(del){ if(confirm('Удалить запись?')){ state.monthlyResults = state.monthlyResults.filter(x=>x.id!==del); save(); render(); } }
+ });
+ box.appendChild(tbl);
+ content.appendChild(box);
+}
+
+function monthlyResultForm(existing){
+ const box = document.createElement('div');
+ box.innerHTML = `<h3>${existing? 'Редактировать' : 'Новый'} месячный результат</h3>`;
+ const month = i('mr-month','text', existing? existing.month : '');
+ const year = i('mr-year','number', existing? existing.year : new Date().getFullYear());
+ const g = i('mr-group','number', existing? existing.group_MoscowDolgoletie : 0);
+ const ind = i('mr-ind','number', existing? existing.individual : 0);
+ const pass = i('mr-pass','number', existing? existing.passive : 0);
+ const hall = i('mr-hall','number', existing? existing.hall_rent_expense : 0);
+ const exp = i('mr-exp','number', existing? existing.expenses_fixed : 0);
+ box.appendChild(label('Месяц (напр. Май)')); box.appendChild(month);
+ box.appendChild(label('Год')); box.appendChild(year);
+ box.appendChild(label('Группы (М.Д.)')); box.appendChild(g);
+ box.appendChild(label('Индивидуальные')); box.appendChild(ind);
+ box.appendChild(label('Пассивный')); box.appendChild(pass);
+ box.appendChild(label('Аренда (расход)')); box.appendChild(hall);
+ box.appendChild(label('Постоянные расходы')); box.appendChild(exp);
+
+ const autofill = addBtn('Автозаполнить по данным', ()=>{
+   const mm = prompt('Введите YYYY-MM (напр. 2025-05) для автозаполнения:');
+   if(!mm || !/^\d{4}-\d{2}$/.test(mm)){ alert('Неверный формат'); return; }
+   const res = autofillMonth(mm);
+   g.value = res.group_MoscowDolgoletie;
+   ind.value = res.individual;
+   pass.value = res.passive;
+   hall.value = res.hall_rent_expense;
+   exp.value = res.expenses_fixed;
+ });
+ box.appendChild(autofill);
+
+ const saveBtn = addBtn('Сохранить', ()=>{
+   const obj = {
+     id: existing? existing.id : (Date.now()+Math.random()),
+     month: month.value || '',
+     year: Number(year.value||new Date().getFullYear()),
+     group_MoscowDolgoletie: Number(g.value||0),
+     individual: Number(ind.value||0),
+     passive: Number(pass.value||0),
+     hall_rent_expense: Number(hall.value||0),
+     expenses_fixed: Number(exp.value||0),
+   };
+   obj.totalIncome = obj.group_MoscowDolgoletie + obj.individual + obj.passive;
+   obj.totalExpenses = obj.hall_rent_expense + obj.expenses_fixed;
+   obj.profit = obj.totalIncome - obj.totalExpenses;
+   if(existing){ const idx = state.monthlyResults.findIndex(x=>x.id===existing.id); state.monthlyResults[idx] = obj; } else state.monthlyResults.push(obj);
+   save(); closeModal(); render();
+ });
+ box.appendChild(saveBtn);
+ return box;
+}
+
+function autofillMonth(yyyymm){
+ const period = r => r.date && r.date.indexOf(yyyymm)===0;
+ const group = state.monthlyData.filter(r=>r.category==='Московское долголетие' && period(r)).reduce((s,i)=>s+i.income,0);
+ const individual = state.monthlyData.filter(r=>r.category==='Индивидуальные' && period(r)).reduce((s,i)=>s+i.income,0);
+ const passive = state.monthlyData.filter(r=>r.category==='Пассив' && period(r)).reduce((s,i)=>s+i.income,0);
+ const hall = state.monthlyData.filter(r=>period(r)).reduce((s,i)=>s + (Number(i.hall)||0),0);
+ const exp = state.monthlyData.filter(r=>period(r)).reduce((s,i)=>s + (Number(i.expense)||0),0);
+ return { group_MoscowDolgoletie: group, individual, passive, hall_rent_expense: hall, expenses_fixed: exp };
+}
+
+/*** SETTINGS ***/
+function renderSettings(content, toolbar){
+ const box=document.createElement('div');
+ box.innerHTML="<h3>Настройки локаций (МД)</h3>";
+
+ const tbl=document.createElement("table");
+ tbl.innerHTML=`<thead><tr>
+ <th>Локация</th><th>Аренда</th><th>Ставка</th><th>Тип</th><th></th>
+ </tr></thead><tbody></tbody>`;
+ const body=tbl.querySelector("tbody");
+ body.innerHTML = ''; // clear
+
+ Object.keys(state.locationsMD).forEach(name=>{
+  const r=state.locationsMD[name];
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td>${name}</td>
+    <td><input value="${r.rent}" data-f="rent" /></td>
+    <td><input value="${r.rate}" data-f="rate" /></td>
+    <td>
+      <select data-f="type">
+       <option ${r.type=="%"?"selected":""}>%</option>
+       <option ${r.type=="фикс"?"selected":""}>фикс</option>
+      </select>
+    </td>
+    <td><button data-save="${name}" class="btn">Сохранить</button></td>`;
+  body.appendChild(tr);
+ });
+
+ tbl.addEventListener('click', (e)=>{
+  const name = e.target.getAttribute("data-save");
+  if(name){
+    const tr = e.target.closest('tr');
+    const inputs = tr.querySelectorAll('[data-f]');
+    let obj = {};
+    inputs.forEach(x=>{ obj[x.dataset.f] = x.value; });
+    obj.rent = Number(obj.rent||0);
+    obj.rate = Number(obj.rate||0);
+    state.locationsMD[name] = obj;
+    save();
+    render();
+  }
+ });
+
+ box.appendChild(tbl);
+
+ // add new location
+ const add = document.createElement('div');
+ add.innerHTML = '<h4>Новая локация</h4>';
+ const name = i('newname','text','');
+ const rent = i('newrent','number','0');
+ const rate = i('newrate','number','0');
+ const type = s(['%','фикс'], '%');
+ add.appendChild(label('Название')); add.appendChild(name);
+ add.appendChild(label('Аренда')); add.appendChild(rent);
+ add.appendChild(label('Ставка')); add.appendChild(rate);
+ add.appendChild(label('Тип')); add.appendChild(type);
+ const addBtnEl = addBtn('Добавить', ()=>{
+   if(!name.value.trim()){ alert('Введите название'); return; }
+   state.locationsMD[name.value.trim()] = { rent: Number(rent.value||0), rate: Number(rate.value||0), type: type.value||'%' };
+   save(); render();
+ });
+ add.appendChild(addBtnEl);
+ box.appendChild(add);
+
+ content.appendChild(box);
+}
+
+/*** IMPORT / EXPORT ***/
+function exportCSV(){
+ const hdr = ['date,category,location,people,income,hall,teacher,expense,profit,note'];
+ const rows = state.monthlyData.map(r=> [r.date||'', r.category||'', `"${r.location||''}"`, r.people||0, r.income||0, r.hall||0, r.teacher||0, r.expense||0, r.profit||0, `"${(r.note||'').replace(/"/g,'""')}"`].join(','));
+ const csv = hdr.concat(rows).join('\\n');
+ const a = document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download='monthlyData.csv'; a.click();
+}
+
+function openImportModal(){
+ const box = document.createElement('div');
+ box.innerHTML = '<h3>Импорт JSON</h3><div class="muted">Вставьте JSON и нажмите Импортировать</div>';
+ const ta = document.createElement('textarea'); ta.style.width='100%'; ta.style.height='240px';
+ box.appendChild(ta);
+ const imp = addBtn('Импортировать', ()=> {
+   try{
+     const obj = JSON.parse(ta.value);
+     state = obj;
+     if(!state.monthlyData) state.monthlyData=[];
+     if(!state.locationsMD) state.locationsMD = {};
+     if(!state.students) state.students = [];
+     if(!state.monthlyResults) state.monthlyResults = [];
+     save(); closeModal(); render();
+   }catch(e){ alert('Ошибка JSON: '+e.message); }
+ });
+ box.appendChild(imp);
+ const cancel = addBtn('Отмена', ()=> closeModal(), 'btn ghost');
+ box.appendChild(cancel);
+ modal(box);
+}
+
+/*** Utils ***/
+render();
+</script>
+</body>
+</html>
