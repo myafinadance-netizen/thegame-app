@@ -3,405 +3,284 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Финансовый бот — Месячный отчёт и аналитика</title>
+<title>Финансовый бот</title>
 <style>
-  /* Простой адаптивный стиль — сделан чтобы сразу было видно контент на телефоне */
-  :root{--brand:#2563eb;--muted:#6b7280}
-  *{box-sizing:border-box}
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; margin:0; background:#f3f4f6; color:#111}
-  header{background:var(--brand); color:#fff; padding:14px 16px; display:flex; gap:12px; align-items:center}
-  header h1{font-size:16px; margin:0; flex:1}
-  main{max-width:1100px; margin:12px auto; padding:12px; background:#fff; border-radius:10px}
-  nav.tabs{display:flex; gap:8px; margin-bottom:10px; overflow:auto; padding-bottom:6px}
-  .tab{padding:8px 12px; border-radius:8px; background:#eef2ff; color:var(--brand); font-weight:600; cursor:pointer; white-space:nowrap}
-  .tab.active{background:var(--brand); color:#fff}
-  .toolbar{display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap}
-  .btn{background:var(--brand); color:#fff; border:none; padding:8px 10px; border-radius:8px; cursor:pointer}
-  .btn.ghost{background:#fff; color:var(--brand); border:1px solid var(--brand)}
-  .muted{color:var(--muted); font-size:13px}
-  table{width:100%; border-collapse:collapse; margin-top:8px; font-size:14px}
-  th,td{padding:8px; border:1px solid #e6edf3; text-align:left}
-  th{background:#f8fafc}
-  .card-row{display:flex; gap:8px; margin:8px 0; flex-wrap:wrap}
-  .card{background:#f8fafc; padding:10px; border-radius:8px; min-width:140px; border:1px solid #eef2ff}
-  .modal{position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center; z-index:999}
-  .modal .box{background:#fff; padding:14px; border-radius:8px; width:720px; max-width:95%; max-height:86%; overflow:auto}
-  label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px}
-  input,select,textarea{width:100%; padding:8px; border-radius:8px; border:1px solid #e6eef9; margin-bottom:8px}
-  .small{font-size:13px; padding:6px 8px}
-  footer{font-size:13px; color:var(--muted); margin-top:10px}
-  /* ensure first content visible without scroll on mobile */
-  @media (max-width:480px){ header{padding:12px} main{margin:8px} .card{min-width:120px} }
+:root{--brand:#2563eb;--muted:#6b7280}
+*{box-sizing:border-box}
+body{font-family:system-ui;-apple-system,Segoe UI,Roboto,Arial; margin:0; background:#f3f4f6; color:#111}
+header{background:var(--brand); color:#fff; padding:14px 16px; display:flex; gap:12px; align-items:center}
+header h1{font-size:16px; margin:0; flex:1}
+main{max-width:1100px; margin:12px auto; padding:12px; background:#fff; border-radius:10px}
+nav.tabs{display:flex; gap:8px; margin-bottom:10px; overflow:auto; padding-bottom:6px}
+.tab{padding:8px 12px; border-radius:8px; background:#eef2ff; color:var(--brand); font-weight:600; cursor:pointer}
+.tab.active{background:var(--brand); color:#fff}
+.toolbar{display:flex; gap:8px; align-items:center;margin-bottom:10px; flex-wrap:wrap}
+.btn{background:var(--brand); color:#fff; border:none; padding:8px 10px; border-radius:8px; cursor:pointer}
+.btn.ghost{background:#fff; color:var(--brand); border:1px solid var(--brand)}
+table{width:100%; border-collapse:collapse; margin-top:8px; font-size:14px}
+th,td{padding:8px; border:1px solid #e6edf3; text-align:left}
+th{background:#f8fafc}
+.card{background:#f8fafc; padding:10px; border-radius:8px;border:1px solid #eef2ff;min-width:140px}
+.card-row{display:flex; gap:8px; margin:8px 0; flex-wrap:wrap}
+.modal{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:999}
+.modal .box{background:#fff;padding:14px;border-radius:8px;width:720px;max-width:95%;max-height:86%;overflow:auto}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+input,select{width:100%;padding:8px;border-radius:8px;border:1px solid #e6eef9;margin-bottom:8px}
 </style>
 </head>
 <body>
-<header>
-  <h1>Финансовый бот — Месячный отчёт, Аналитика, База</h1>
-  <div style="font-size:13px; opacity:0.95">Local</div>
-</header>
+<header><h1>Финансовый бот</h1></header>
 
 <main id="app">
-  <nav class="tabs" id="tabs"></nav>
-
-  <div class="toolbar" id="toolbar"></div>
-
-  <div id="content"></div>
-
-  <footer>Данные хранятся в localStorage. Экспорт/импорт JSON доступен в тулбаре.</footer>
+<nav class="tabs"></nav>
+<div class="toolbar"></div>
+<div id="content"></div>
 </main>
 
 <div id="modal-root"></div>
 
 <script>
-/* Single-file app (готово для GitHub) — быстрый справочник:
-   - Добавить запись: "Добавить" -> заполнить поля -> сохранить
-   - "Расход за зал" доступен в форме
-   - Аналитика: рейтинг педагогов/локаций
-   - Экспорт JSON: сохранить резервную копию
-*/
-
-const DEFAULT = {
-  monthlyData: [],
-  individual: [],
-  expenses: [],
-  passive: [],
-  monthlyResults: [],
-  students: []
+/*** DATA ***/
+let state = JSON.parse(localStorage.getItem('finData_v2')||'{}');
+if(!state.monthlyData) state.monthlyData=[];
+if(!state.locationsMD) state.locationsMD = {
+ "Буденного":{rent:0,rate:0,type:"%"},
+ "Черкизовская":{rent:0,rate:0,type:"%"},
+ "Парк":{rent:0,rate:0,type:"фикс"},
 };
+const TABS=["Месячный отчёт","Аналитика","Настройки"];
 
-let state = loadState();
-const TABS = ['Месячный отчёт','Аналитика','База учеников','По месяцам','Настройки'];
-let activeTab = localStorage.getItem('activeTab') || TABS[0];
-
-const tabsRoot = document.getElementById('tabs');
-const toolbar = document.getElementById('toolbar');
-const content = document.getElementById('content');
-const modalRoot = document.getElementById('modal-root');
-
-renderTabs();
-renderToolbar();
-renderContent();
-
-function genId(){ return 'id-'+Math.random().toString(36).slice(2,9); }
-function saveState(){ localStorage.setItem('finData', JSON.stringify(state)); }
-function loadState(){
-  try{
-    const raw = localStorage.getItem('finData');
-    if(!raw){ localStorage.setItem('finData', JSON.stringify(DEFAULT)); return JSON.parse(JSON.stringify(DEFAULT)); }
-    const s = JSON.parse(raw);
-    s.monthlyData = (s.monthlyData||[]).map(r => ({ id:r.id||genId(), date:r.date||new Date().toISOString().slice(0,10), location:r.location||'', club:r.club||r.location||'', category:r.category||guessCategory(r), type:r.type||'', teacher:r.teacher||'', people:Number(r.people||0), income:Number(r.income||0), expense:Number(r.expense||0), hallExpense:Number(r.hallExpense||0), profit: Number(r.profit || (Number(r.income||0)-Number(r.expense||0)-Number(r.hallExpense||0))), note:r.note||'' }));
-    s.individual = (s.individual||[]).map(r => ({ id:r.id||genId(), date:r.date||'', client:r.client||'', clientId:r.clientId||'', teacher:r.teacher||'', location:r.location||'', hours:Number(r.hours||0), rate:Number(r.rate||0), income:Number(r.income||0), note:r.note||'' }));
-    s.expenses = (s.expenses||[]).map(r => ({ id:r.id||genId(), date:r.date||'', item:r.item||'', amount:Number(r.amount||0), note:r.note||'' }));
-    s.passive = (s.passive||[]).map(r => ({ id:r.id||genId(), source:r.source||'', monthly:Number(r.monthly||0), capital:Number(r.capital||0), rate:Number(r.rate||0), note:r.note||'' }));
-    s.monthlyResults = (s.monthlyResults||[]).map(r => ({ id:r.id||genId(), month:r.month||'', year:r.year||new Date().getFullYear(), group_MoscowDolgoletie:Number(r.group_MoscowDolgoletie||0), individual:Number(r.individual||0), passive:Number(r.passive||0), hall_rent_expense:Number(r.hall_rent_expense||0), expenses_fixed:Number(r.expenses_fixed||0), totalIncome:Number(r.totalIncome||0), totalExpenses:Number(r.totalExpenses||0), profit:Number(r.profit||0), note:r.note||'' }));
-    s.students = (s.students||[]).map(r => ({ id:r.id||genId(), name:r.name||'', phone:r.phone||'', groups:r.groups||[] }));
-    return s;
-  }catch(e){
-    console.error('load error', e);
-    localStorage.setItem('finData', JSON.stringify(DEFAULT));
-    return JSON.parse(JSON.stringify(DEFAULT));
-  }
-}
-
-function guessCategory(r){
-  if(!r) return 'Прочее';
-  const loc = (r.location||'').toLowerCase();
-  if(loc.includes('долголет')) return 'Московское долголетие';
-  if((r.type||'').toLowerCase().includes('индив')) return 'Индивидуальные уроки';
-  return r.category || 'Прочее';
-}
-
-function fmt(n){ return Number(n||0).toLocaleString('ru-RU'); }
-function downloadFile(filename, text){ const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(text); a.download=filename; a.click(); }
+function save(){localStorage.setItem('finData_v2',JSON.stringify(state));}
 
 function renderTabs(){
-  tabsRoot.innerHTML='';
-  TABS.forEach(t => {
-    const d = document.createElement('div'); d.className='tab'+(t===activeTab?' active':''); d.textContent=t;
-    d.onclick = ()=>{ activeTab=t; localStorage.setItem('activeTab', t); renderTabs(); renderToolbar(); renderContent(); };
-    tabsRoot.appendChild(d);
-  });
+ const nav=document.querySelector(".tabs");
+ nav.innerHTML="";
+ TABS.forEach(t=>{
+   const b=document.createElement("div");
+   b.className="tab"+(t===active?" active":"");
+   b.textContent=t;
+   b.onclick=()=>{active=t;saveActive();render();}
+   nav.appendChild(b);
+ })
 }
 
-function renderToolbar(){
-  toolbar.innerHTML='';
-  const add = el('button','Добавить','btn'); add.onclick = ()=> openModal(addMonthlyForm());
-  toolbar.appendChild(add);
+let active = localStorage.getItem('activeTab2')||"Месячный отчёт";
+function saveActive(){localStorage.setItem('activeTab2',active);}
 
-  const expCSV = el('button','Экспорт CSV','btn ghost'); expCSV.onclick = ()=> exportCSV();
-  toolbar.appendChild(expCSV);
-
-  const expJSON = el('button','Экспорт JSON','btn ghost'); expJSON.onclick = ()=> downloadFile('finData.json', JSON.stringify(state, null, 2));
-  toolbar.appendChild(expJSON);
-
-  const imp = el('button','Импорт JSON','btn ghost'); imp.onclick = ()=> openModal(importForm());
-  toolbar.appendChild(imp);
-
-  const info = document.createElement('div'); info.className='muted';
-  info.style.marginLeft='auto'; info.textContent = `Записей: ${state.monthlyData.length}`;
-  toolbar.appendChild(info);
+function render(){
+ renderTabs();
+ const toolbar=document.querySelector(".toolbar");
+ const content=document.getElementById("content");
+ toolbar.innerHTML=""; content.innerHTML="";
+ if(active==="Месячный отчёт") renderMonthly(toolbar,content);
+ if(active==="Аналитика") renderAnalytics(content);
+ if(active==="Настройки") renderSettings(content);
 }
 
-function renderContent(){
-  content.innerHTML='';
-  if(activeTab==='Месячный отчёт') return renderMonthly();
-  if(activeTab==='Аналитика') return renderAnalytics();
-  if(activeTab==='База учеников') return renderStudents();
-  if(activeTab==='По месяцам') return renderByMonths();
-  if(activeTab==='Настройки') return renderSettings();
+function addBtn(text,cb){
+ const b=document.createElement("button");
+ b.className="btn";
+ b.textContent=text;
+ b.onclick=cb;
+ return b;
 }
 
-/* Monthly */
-function renderMonthly(){
-  const container = document.createElement('div');
-  const head = document.createElement('h3'); head.textContent='Месячный отчёт (записи)'; container.appendChild(head);
-  const note = document.createElement('div'); note.className='muted'; note.textContent='Добавляй сессии — у каждой запись можно указать Расход за зал.'; container.appendChild(note);
-
-  const table = document.createElement('table');
-  table.innerHTML = `<thead><tr><th>Дата</th><th>Категория</th><th>Локация</th><th>Тип</th><th>Педагог</th><th>Чел.</th><th>Выручка</th><th>Расход</th><th>Аренда зала</th><th>Прибыль</th><th>Действия</th></tr></thead><tbody></tbody>`;
-  const tbody = table.querySelector('tbody');
-  state.monthlyData.slice().reverse().forEach(r=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.date}</td><td>${r.category}</td><td><span class="link" data-loc="${r.location}">${r.location}</span></td><td>${r.type}</td><td>${r.teacher}</td><td>${r.people}</td><td>${fmt(r.income)}</td><td>${fmt(r.expense)}</td><td>${fmt(r.hallExpense)}</td><td>${fmt(r.profit)}</td><td><button class="small btn ghost" data-edit="${r.id}">Ред.</button> <button class="small btn" data-del="${r.id}">Удалить</button></td>`;
-    tbody.appendChild(tr);
-  });
-  table.addEventListener('click', e=>{
-    const id = e.target.getAttribute('data-edit'); const del = e.target.getAttribute('data-del'); const loc = e.target.getAttribute('data-loc');
-    if(id){ const rec = state.monthlyData.find(x=>x.id===id); openModal(addMonthlyForm(rec)); }
-    if(del){ if(confirm('Удалить запись?')){ state.monthlyData = state.monthlyData.filter(x=>x.id!==del); saveState(); renderContent(); } }
-    if(loc) openModal(locationDetail(loc));
-  });
-
-  // sums
-  const totals = state.monthlyData.reduce((s,i)=>{ s.income+=i.income; s.expense+=i.expense; s.hall+=i.hallExpense; s.profit+=i.profit; return s; }, {income:0, expense:0, hall:0, profit:0});
-  const footer = document.createElement('div'); footer.className='card-row';
-  ['Доход','Расходы','Аренда','Прибыль'].forEach((t,i) => {
-    const c = document.createElement('div'); c.className='card'; c.innerHTML = `<div style="font-size:13px;color:var(--muted)">${t}</div><div style="font-weight:700">${[fmt(totals.income),fmt(totals.expense),fmt(totals.hall),fmt(totals.profit)][i]} ₽</div>`; footer.appendChild(c);
-  });
-
-  container.appendChild(table);
-  container.appendChild(footer);
-  content.appendChild(container);
+function modal(inner){
+ const root=document.getElementById("modal-root");
+ root.innerHTML="";
+ const m=document.createElement("div");
+ m.className="modal";
+ const box=document.createElement("div");
+ box.className="box";
+ box.appendChild(inner);
+ m.appendChild(box);
+ root.appendChild(m);
+ m.onclick=e=>{if(e.target===m) root.innerHTML="";}
 }
 
-/* Modal form for monthly record */
-function addMonthlyForm(existing){
-  const box = document.createElement('div');
-  box.innerHTML = `<h3>${existing ? 'Редактировать запись' : 'Новая запись'}</h3>`;
-  const form = document.createElement('div');
-  form.innerHTML = `
-    <label>Дата</label><input id="f-date" type="date" value="${existing?existing.date:''}" />
-    <label>Категория</label>
-    <select id="f-category"><option>Московское долголетие</option><option>Индивидуальные уроки</option><option>Аренда зала</option><option>Пассивный</option><option>Прочее</option></select>
-    <label>Локация / Клуб</label><input id="f-location" type="text" value="${existing?existing.location:''}" />
-    <label>Тип</label><input id="f-type" type="text" value="${existing?existing.type:''}" />
-    <label>Педагог</label><input id="f-teacher" type="text" value="${existing?existing.teacher:''}" />
-    <label>Человек (кол-во)</label><input id="f-people" type="number" value="${existing?existing.people:0}" />
-    <label>Выручка (₽)</label><input id="f-income" type="number" value="${existing?existing.income:0}" />
-    <label>Прочие расходы (₽)</label><input id="f-expense" type="number" value="${existing?existing.expense:0}" />
-    <label>Расход за зал (₽)</label><input id="f-hall" type="number" value="${existing?existing.hallExpense:0}" />
-    <label>Примечание</label><input id="f-note" type="text" value="${existing?existing.note:''}" />
-  `;
-  box.appendChild(form);
-  const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='8px';
-  const save = el('button','Сохранить','btn'); save.onclick = ()=>{
-    const rec = {
-      id: existing? existing.id : genId(),
-      date: document.getElementById('f-date').value || new Date().toISOString().slice(0,10),
-      category: document.getElementById('f-category').value,
-      location: document.getElementById('f-location').value,
-      club: document.getElementById('f-location').value,
-      type: document.getElementById('f-type').value,
-      teacher: document.getElementById('f-teacher').value,
-      people: Number(document.getElementById('f-people').value||0),
-      income: Number(document.getElementById('f-income').value||0),
-      expense: Number(document.getElementById('f-expense').value||0),
-      hallExpense: Number(document.getElementById('f-hall').value||0),
-      note: document.getElementById('f-note').value||''
-    };
-    rec.profit = rec.income - rec.expense - rec.hallExpense;
-    if(existing){
-      const idx = state.monthlyData.findIndex(x=>x.id===existing.id);
-      state.monthlyData[idx] = rec;
-    } else state.monthlyData.push(rec);
-    saveState(); closeModal(); renderContent();
-  };
-  const cancel = el('button','Отмена','btn ghost'); cancel.onclick = ()=> closeModal();
-  actions.appendChild(save); actions.appendChild(cancel); box.appendChild(actions);
-  return box;
+function closeModal(){document.getElementById("modal-root").innerHTML="";}
+
+/*** MONTHLY ***/
+function renderMonthly(tb,content){
+ tb.appendChild(addBtn("Добавить",()=>modal(monthForm())));
+
+ const tbl=document.createElement("table");
+ tbl.innerHTML=`<thead><tr>
+ <th>Дата</th><th>Категория</th><th>Локация</th>
+ <th>Люди</th><th>Доход</th><th>Аренда</th>
+ <th>Педагог</th><th>Прочие</th><th>Прибыль</th>
+ </tr></thead><tbody></tbody>`;
+ const body=tbl.querySelector("tbody");
+
+ state.monthlyData.slice().reverse().forEach(r=>{
+   const tr=document.createElement("tr");
+   tr.innerHTML=`
+   <td>${r.date}</td>
+   <td>${r.category}</td>
+   <td>${r.location||""}</td>
+   <td>${r.people||0}</td>
+   <td>${fmt(r.income)}</td>
+   <td>${fmt(r.hall)}</td>
+   <td>${fmt(r.teacher)}</td>
+   <td>${fmt(r.expense)}</td>
+   <td>${fmt(r.profit)}</td>`;
+   body.appendChild(tr);
+ });
+ content.appendChild(tbl);
 }
 
-/* Location detail modal */
-function locationDetail(location){
-  const items = state.monthlyData.filter(r=>r.location===location);
-  const box = document.createElement('div'); box.className='box';
-  box.innerHTML = `<h3>Детали — ${location}</h3>`;
-  const totals = items.reduce((s,i)=>{ s.inc+=i.income; s.hall+=i.hallExpense; s.exp+=i.expense; s.prof+=i.profit; return s; }, {inc:0,hall:0,exp:0,prof:0});
-  const info = document.createElement('div'); info.className='card-row';
-  ['Доход','Аренда','Прочие','Прибыль'].forEach((t,i)=>{ const c=document.createElement('div'); c.className='card'; c.innerHTML=`<div class="muted">${t}</div><div style="font-weight:700">${[fmt(totals.inc),fmt(totals.hall),fmt(totals.exp),fmt(totals.prof)][i]} ₽</div>`; info.appendChild(c); });
-  box.appendChild(info);
-  const tbl = document.createElement('table'); tbl.innerHTML = '<thead><tr><th>Дата</th><th>Педагог</th><th>Выручка</th><th>Аренда</th><th>Прочие</th><th>Прибыль</th><th></th></tr></thead><tbody></tbody>';
-  const tb = tbl.querySelector('tbody');
-  items.forEach(it=>{ const tr=document.createElement('tr'); tr.innerHTML = `<td>${it.date}</td><td>${it.teacher}</td><td>${fmt(it.income)}</td><td><input type="number" value="${it.hallExpense}" data-id="${it.id}" style="width:110px" /></td><td>${fmt(it.expense)}</td><td>${fmt(it.profit)}</td><td><button class="small btn" data-save="${it.id}">Сохранить</button></td>`; tb.appendChild(tr); });
-  box.appendChild(tbl);
-  const close = el('button','Закрыть','btn ghost'); close.onclick = ()=> closeModal(); box.appendChild(close);
+function monthForm(){
+ const box=document.createElement("div");
+ box.innerHTML="<h3>Добавить</h3>";
 
-  // handle inline save
-  setTimeout(()=>{ tbl.addEventListener('click', e=>{ const id = e.target.getAttribute('data-save'); if(id){ const input = tbl.querySelector('input[data-id="'+id+'"]'); const val = Number(input.value||0); const idx = state.monthlyData.findIndex(x=>x.id===id); if(idx>=0){ state.monthlyData[idx].hallExpense = val; state.monthlyData[idx].profit = state.monthlyData[idx].income - state.monthlyData[idx].expense - val; saveState(); closeModal(); renderContent(); openModal(locationDetail(location)); } } }); },50);
+ const date=i("date"),cat=s("category",["Московское долголетие","Индивидуальные","Аренда зала","Пассив","Другое"]);
+ const loc=s("loc",Object.keys(state.locationsMD));
+ const people=i("people","number");
+ const expense=i("expense","number");
+ const hall=i("hall","number");
+ const rate=i("rate","number");
+ const rateType=s("rateType",["%","фикс"]);
 
-  const wrapper = document.createElement('div'); wrapper.className='box'; wrapper.appendChild(box);
-  return wrapper;
+ const wrap=document.createElement("div");
+ wrap.append(label("Дата"),date,label("Категория"),cat);
+
+ const mdWrap=document.createElement("div");
+
+ cat.onchange=()=>mdWrap.style.display=cat.value==="Московское долголетие"?"block":"none";
+ cat.onchange();
+
+ mdWrap.append(
+   label("Локация"),loc,
+   label("Ставка педагога"),rate,
+   label("Тип ставки"),rateType,
+   label("Аренда зала"),hall,
+ );
+
+ wrap.append(mdWrap,label("Кол-во человек"),people,label("Прочие расходы"),expense);
+
+ const saveBtn=addBtn("Сохранить",()=>{
+   let income=0,teacher=0,h=Number(hall.value||0);
+   const p=Number(people.value||0);
+   if(cat.value==="Московское долголетие"){
+     income=p*280;
+     const conf = state.locationsMD[loc.value] || {};
+     // auto
+     if(!hall.value) h = Number(conf.rent||0);
+     if(!rate.value) rate.value = conf.rate||0;
+     if(!rateType.value) rateType.value = conf.type||"%";
+     if(rateType.value==="%") teacher = income * (Number(rate.value)/100);
+     else teacher = Number(rate.value||0);
+   }else{
+     income=0;
+   }
+
+   const rec={
+     date:date.value,
+     category:cat.value,
+     location:cat.value==="Московское долголетие"?loc.value:"",
+     people:p,
+     income,
+     hall:h,
+     teacher,
+     expense:Number(expense.value||0),
+   };
+   rec.profit = rec.income - rec.hall - rec.teacher - rec.expense;
+   state.monthlyData.push(rec);
+   save(); closeModal(); render();
+ });
+
+ wrap.append(saveBtn);
+ box.appendChild(wrap);
+ return box;
+}
+/*** ANALYTICS ***/
+function renderAnalytics(content){
+ let income=0,profit=0,hall=0,teacher=0,ex=0;
+ state.monthlyData.forEach(r=>{
+  income+=r.income;
+  hall+=r.hall;
+  teacher+=r.teacher;
+  ex+=r.expense;
+  profit+=r.profit;
+ });
+
+ const tbl=document.createElement("table");
+ tbl.innerHTML=`<tr><td>Доход</td><td>${fmt(income)}</td></tr>
+ <tr><td>Аренда</td><td>${fmt(hall)}</td></tr>
+ <tr><td>Педагоги</td><td>${fmt(teacher)}</td></tr>
+ <tr><td>Прочие</td><td>${fmt(ex)}</td></tr>
+ <tr><td>Прибыль</td><td>${fmt(profit)}</td></tr>`;
+ content.append(tbl);
 }
 
-/* Analytics */
-function renderAnalytics(){
-  const box = document.createElement('div'); box.innerHTML = '<h3>Аналитика</h3>';
-  const totalIncome = state.monthlyData.reduce((s,i)=>s+i.income,0) + state.individual.reduce((s,i)=>s+i.income,0) + state.passive.reduce((s,p)=>s+p.monthly,0);
-  const totalHall = state.monthlyData.reduce((s,i)=>s+i.hallExpense,0);
-  const fixed = state.expenses.reduce((s,i)=>s+i.amount,0);
-  const totalProfit = totalIncome - (totalHall + fixed);
-  const summary = document.createElement('div'); summary.className='card-row';
-  [['Общий доход',fmt(totalIncome)],['Аренда (итого)',fmt(totalHall)],['Пост. расходы',fmt(fixed)],['Прибыль (прибл.)',fmt(totalProfit)]].forEach(i=>{ const c=document.createElement('div'); c.className='card'; c.innerHTML=`<div class="muted">${i[0]}</div><div style="font-weight:700">${i[1]} ₽</div>`; summary.appendChild(c); });
-  box.appendChild(summary);
+/*** SETTINGS ***/
+function renderSettings(content){
+ const box=document.createElement("div");
+ box.innerHTML="<h3>Настройки локаций (МД)</h3>";
 
-  // teachers ranking
-  const tmap = {};
-  state.monthlyData.forEach(r=>{ const t = r.teacher||'Без имени'; if(!tmap[t]) tmap[t]={teacher:t,groupIncome:0,hall:0,profit:0}; tmap[t].groupIncome+=r.income; tmap[t].hall+=r.hallExpense; tmap[t].profit+=r.profit; });
-  state.individual.forEach(r=>{ const t=r.teacher||'Без имени'; if(!tmap[t]) tmap[t]={teacher:t,groupIncome:0,hall:0,profit:0,ind:0}; tmap[t].ind=(tmap[t].ind||0)+r.income; });
-  const teachers = Object.values(tmap).map(x=>({name:x.teacher, income:(x.groupIncome||0)+(x.ind||0), hall:(x.hall||0), net: ((x.groupIncome||0)+(x.ind||0))-(x.hall||0) })).sort((a,b)=>b.income-a.income);
-  const ttable = document.createElement('table'); ttable.innerHTML = '<thead><tr><th>#</th><th>Педагог</th><th>Доход</th><th>Аренда</th><th>Чистая прибыль</th></tr></thead><tbody></tbody>';
-  teachers.slice(0,20).forEach((t,i)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${t.name}</td><td>${fmt(t.income)}</td><td>${fmt(t.hall)}</td><td>${fmt(t.net)}</td>`; ttable.querySelector('tbody').appendChild(tr); });
-  box.appendChild(document.createElement('h4')).textContent='Рейтинг педагогов (по доходу)'; box.appendChild(ttable);
+ const tbl=document.createElement("table");
+ tbl.innerHTML=`<thead><tr>
+ <th>Локация</th><th>Аренда</th><th>Ставка</th><th>Тип</th><th></th>
+ </tr></thead><tbody></tbody>`;
+ const body=tbl.querySelector("tbody");
 
-  // locations
-  const lmap = {};
-  state.monthlyData.forEach(r=>{ const l = r.club || r.location || 'Без локации'; if(!lmap[l]) lmap[l]={club:l,income:0,hall:0,profit:0}; lmap[l].income+=r.income; lmap[l].hall+=r.hallExpense; lmap[l].profit+=r.profit; });
-  const clubs = Object.values(lmap).sort((a,b)=>b.income-a.income);
-  const ltable = document.createElement('table'); ltable.innerHTML = '<thead><tr><th>#</th><th>Клуб</th><th>Доход</th><th>Аренда</th><th>Чистая прибыль</th></tr></thead><tbody></tbody>';
-  clubs.slice(0,20).forEach((c,i)=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td>${c.club}</td><td>${fmt(c.income)}</td><td>${fmt(c.hall)}</td><td>${fmt(c.profit)}</td>`; ltable.querySelector('tbody').appendChild(tr); });
-  box.appendChild(document.createElement('h4')).textContent='Рейтинг локаций'; box.appendChild(ltable);
+ Object.keys(state.locationsMD).forEach(name=>{
+  const r=state.locationsMD[name];
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td>${name}</td>
+    <td><input value="${r.rent}" data-f="rent" /></td>
+    <td><input value="${r.rate}" data-f="rate" /></td>
+    <td>
+      <select data-f="type">
+       <option ${r.type=="%"?"selected":""}>%</option>
+       <option ${r.type=="фикс"?"selected":""}>фикс</option>
+      </select>
+    </td>
+    <td><button data-save="${name}" class="btn">Сохранить</button></td>`;
+  body.appendChild(tr);
+ });
 
-  content.appendChild(box);
+ tbl.onclick=e=>{
+  const name=e.target.getAttribute("data-save");
+  if(name){
+    const tr=e.target.closest("tr");
+    const inputs=tr.querySelectorAll("[data-f]");
+    let obj={};
+    inputs.forEach(x=>{obj[x.dataset.f]=x.value});
+    obj.rent=Number(obj.rent||0);
+    obj.rate=Number(obj.rate||0);
+    state.locationsMD[name]=obj;
+    save(); render();
+  }
+ };
+
+ box.appendChild(tbl);
+
+ // add new
+ const add=document.createElement("div");
+ add.innerHTML="<h4>Новая локация</h4>";
+ const name=i("newname");
+ const rent=i("newrent","number");
+ const rate=i("newrate","number");
+ const type=s("newtype",["%","фикс"]);
+ const saveBtn=addBtn("Добавить",()=>{
+  if(!name.value.trim()) return;
+  state.locationsMD[name.value.trim()]={rent:Number(rent.value),rate:Number(rate.value),type:type.value};
+  save(); render();
+ });
+ add.append(label("Название"),name,label("Аренда"),rent,label("Ставка"),rate,label("Тип"),type,saveBtn);
+ box.appendChild(add);
+
+ content.append(box);
 }
 
-/* Students */
-function renderStudents(){
-  const box = document.createElement('div'); box.innerHTML = '<h3>База учеников</h3>';
-  const add = el('button','Новый ученик','btn'); add.onclick = ()=> openModal(studentForm());
-  box.appendChild(add);
-  const tbl = document.createElement('table'); tbl.innerHTML = '<thead><tr><th>Имя</th><th>Телефон</th><th>Группы</th><th></th></tr></thead><tbody></tbody>';
-  state.students.forEach(s=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${s.name}</td><td>${s.phone||''}</td><td>${(s.groups||[]).join(', ')}</td><td><button class="small btn ghost" data-edit="${s.id}">Ред.</button> <button class="small btn" data-del="${s.id}">Удалить</button></td>`; tbl.querySelector('tbody').appendChild(tr); });
-  tbl.addEventListener('click', e=>{ const id=e.target.getAttribute('data-edit'); const del=e.target.getAttribute('data-del'); if(id){ const s=state.students.find(x=>x.id===id); openModal(studentForm(s)); } if(del){ if(confirm('Удалить?')){ state.students=state.students.filter(x=>x.id!==del); saveState(); renderContent(); } } });
-  box.appendChild(tbl); content.appendChild(box);
-}
-function studentForm(existing){
-  const box = document.createElement('div'); box.innerHTML = `<h3>${existing?'Редактировать':'Новый'} ученик</h3>
-    <label>Имя</label><input id="s-name" value="${existing?existing.name:''}" />
-    <label>Телефон</label><input id="s-phone" value="${existing?existing.phone:''}" />
-    <label>Группы (через запятую)</label><input id="s-groups" value="${existing?(existing.groups||[]).join(', '):''}" />`;
-  const save = el('button','Сохранить','btn'); save.onclick = ()=>{ const name=document.getElementById('s-name').value.trim(); if(!name){ alert('Введите имя'); return; } const phone=document.getElementById('s-phone').value.trim(); const groups=document.getElementById('s-groups').value.split(',').map(x=>x.trim()).filter(Boolean); if(existing){ const idx=state.students.findIndex(x=>x.id===existing.id); state.students[idx]={...existing,name,phone,groups}; } else state.students.push({id:genId(),name,phone,groups}); saveState(); closeModal(); renderContent(); };
-  const cancel = el('button','Отмена','btn ghost'); cancel.onclick = ()=> closeModal();
-  box.appendChild(save); box.appendChild(cancel);
-  return box;
-}
+/*** utils ***/
+function label(t){const e=document.createElement("label");e.textContent=t;return e;}
+function i(name,type="text"){const e=document.createElement("input");e.name=name;if(type)e.type=type;return e;}
+function s(name,arr){const e=document.createElement("select");arr.forEach(v=>{const o=document.createElement("option");o.textContent=v;e.append(o);});return e;}
+function fmt(n){return (Number(n)||0).toLocaleString("ru-RU");}
 
-/* By months (manual + autofill) */
-function renderByMonths(){
-  const box = document.createElement('div'); box.innerHTML = '<h3>По месяцам</h3><div class="muted">Создать итог по месяцу — можно автозаполнить.</div>';
-  const add = el('button','Создать отчёт по месяцу','btn'); add.onclick = ()=> openModal(monthResultForm());
-  box.appendChild(add);
-  const tbl = document.createElement('table'); tbl.innerHTML = '<thead><tr><th>Месяц</th><th>Группы (М.Д.)</th><th>Индив.</th><th>Пассив.</th><th>Аренда</th><th>Пост.расх.</th><th>Доход</th><th>Расход</th><th>Прибыль</th></tr></thead><tbody></tbody>';
-  state.monthlyResults.forEach(m=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${m.month} ${m.year}</td><td>${fmt(m.group_MoscowDolgoletie)}</td><td>${fmt(m.individual)}</td><td>${fmt(m.passive)}</td><td>${fmt(m.hall_rent_expense)}</td><td>${fmt(m.expenses_fixed)}</td><td>${fmt(m.totalIncome)}</td><td>${fmt(m.totalExpenses)}</td><td>${fmt(m.profit)}</td>`; tbl.querySelector('tbody').appendChild(tr); });
-  box.appendChild(tbl); content.appendChild(box);
-}
-function monthResultForm(existing){
-  const box = document.createElement('div'); box.innerHTML = `<h3>${existing?'Редактировать':'Новый'} месячный итог</h3>
-    <label>Месяц (YYYY-MM)</label><input id="mr-month" placeholder="2025-05" value="${existing? (existing.year+'-'+String((new Date(existing.month+' 1').getMonth()+1)).padStart(2,'0')) : ''}" />
-    <label>Группы (Московское долголетие)</label><input id="mr-group" value="${existing?existing.group_MoscowDolgoletie:0}" />
-    <label>Индивидуальные</label><input id="mr-ind" value="${existing?existing.individual:0}" />
-    <label>Пассивный</label><input id="mr-pass" value="${existing?existing.passive:0}" />
-    <label>Аренда (расход)</label><input id="mr-hall" value="${existing?existing.hall_rent_expense:0}" />
-    <label>Постоянные расходы</label><input id="mr-exp" value="${existing?existing.expenses_fixed:0}" />
-  `;
-  const autofill = el('button','Автозаполнить по данным','btn ghost'); autofill.onclick = ()=> {
-    const mm = document.getElementById('mr-month').value.trim();
-    if(!/^\d{4}-\d{2}$/.test(mm)){ alert('Месяц как YYYY-MM'); return; }
-    const res = autofillMonth(mm);
-    document.getElementById('mr-group').value = res.group_MoscowDolgoletie;
-    document.getElementById('mr-ind').value = res.individual;
-    document.getElementById('mr-pass').value = res.passive;
-    document.getElementById('mr-hall').value = res.hall_rent_expense;
-    document.getElementById('mr-exp').value = res.expenses_fixed;
-  };
-  box.appendChild(autofill);
-  const save = el('button','Сохранить','btn'); save.onclick = ()=> {
-    const mm = document.getElementById('mr-month').value.trim();
-    if(!/^\d{4}-\d{2}$/.test(mm)){ alert('Месяц как YYYY-MM'); return; }
-    const [year,mon] = mm.split('-');
-    const group = Number(document.getElementById('mr-group').value||0);
-    const ind = Number(document.getElementById('mr-ind').value||0);
-    const pass = Number(document.getElementById('mr-pass').value||0);
-    const hall = Number(document.getElementById('mr-hall').value||0);
-    const exp = Number(document.getElementById('mr-exp').value||0);
-    const totalIncome = group + ind + pass;
-    const totalExpenses = hall + exp;
-    const profit = totalIncome - totalExpenses;
-    const obj = { id: existing?existing.id:genId(), month: monthName(mon), year:Number(year), group_MoscowDolgoletie:group, individual:ind, passive:pass, hall_rent_expense:hall, expenses_fixed:exp, totalIncome, totalExpenses, profit, note:'' };
-    if(existing){ const idx = state.monthlyResults.findIndex(x=>x.id===existing.id); state.monthlyResults[idx]=obj; } else state.monthlyResults.push(obj);
-    saveState(); closeModal(); renderContent();
-  };
-  const cancel = el('button','Отмена','btn ghost'); cancel.onclick = ()=> closeModal();
-  box.appendChild(save); box.appendChild(cancel);
-  return box;
-}
-function autofillMonth(yyyymm){
-  const period = r => r.date && r.date.indexOf(yyyymm)===0;
-  const group = state.monthlyData.filter(r=>r.category==='Московское долголетие' && period(r)).reduce((s,i)=>s+i.income,0);
-  const individual = state.individual.filter(r=>r.date && r.date.indexOf(yyyymm)===0).reduce((s,i)=>s+i.income,0);
-  const passive = state.passive.reduce((s,p)=>s+p.monthly,0);
-  const hall = state.monthlyData.filter(r=>period(r)).reduce((s,i)=>s+i.hallExpense,0);
-  const exp = state.expenses.filter(r=>r.date && r.date.indexOf(yyyymm)===0).reduce((s,i)=>s+i.amount,0);
-  return { group_MoscowDolgoletie:group, individual, passive, hall_rent_expense:hall, expenses_fixed:exp };
-}
-
-/* Settings */
-function renderSettings(){
-  const box = document.createElement('div'); box.innerHTML = '<h3>Настройки</h3><div class="muted">Восстановить примерные данные / очистить.</div>';
-  const restore = el('button','Загрузить примерные данные','btn ghost'); restore.onclick = ()=> { if(confirm('Заменить данные примерными?')){ state = JSON.parse(JSON.stringify(DEFAULT)); saveState(); renderContent(); } };
-  const clear = el('button','Очистить всё','btn danger'); clear.onclick = ()=> { if(confirm('Очистить всё?')){ state={monthlyData:[],individual:[],expenses:[],passive:[],monthlyResults:[],students:[]}; saveState(); renderContent(); } };
-  box.appendChild(restore); box.appendChild(clear); content.appendChild(box);
-}
-
-/* Import form */
-function importForm(){
-  const box = document.createElement('div'); box.className='box';
-  box.innerHTML = '<h3>Импорт JSON</h3><div class="muted">Вставьте JSON (finData) и нажмите Импортировать.</div>';
-  const ta = document.createElement('textarea'); ta.style.width='100%'; ta.style.height='220px';
-  box.appendChild(ta);
-  const imp = el('button','Импортировать','btn'); imp.onclick = ()=> { try{ const parsed = JSON.parse(ta.value); state = parsed; saveState(); closeModal(); renderContent(); } catch(e){ alert('Ошибка JSON: '+e.message); } };
-  const cancel = el('button','Отмена','btn ghost'); cancel.onclick = ()=> closeModal();
-  box.appendChild(imp); box.appendChild(cancel);
-  return box;
-}
-
-/* Export CSV (monthlyData) */
-function exportCSV(){
-  const hdr = ['date,category,location,club,type,teacher,people,income,expense,hallExpense,profit,note'];
-  const rows = state.monthlyData.map(r => [r.date,r.category,`"${r.location}"`,`"${r.club}"`,r.type,r.teacher,r.people,r.income,r.expense,r.hallExpense,r.profit,`"${(r.note||'').replace(/"/g,'""')}"`].join(','));
-  const csv = hdr.concat(rows).join('\n');
-  downloadFile('monthlyData.csv', csv);
-}
-
-/* Modal helpers */
-function openModal(el){ modalRoot.innerHTML=''; const m=document.createElement('div'); m.className='modal'; const box=document.createElement('div'); box.className='box'; box.appendChild(el); m.appendChild(box); modalRoot.appendChild(m); m.onclick = e=>{ if(e.target===m) closeModal(); }; }
-function closeModal(){ modalRoot.innerHTML=''; }
-
-/* Utils */
-function el(tag, text='', cls=''){ const e=document.createElement(tag); if(text) e.textContent=text; if(cls) e.className=cls; return e; }
-function monthName(m){ const map={'01':'Январь','02':'Февраль','03':'Март','04':'Апрель','05':'Май','06':'Июнь','07':'Июль','08':'Август','09':'Сентябрь','10':'Октябрь','11':'Ноябрь','12':'Декабрь'}; return map[m]||m; }
-
-/* Save before unload */
-window.addEventListener('beforeunload', ()=> saveState());
+render();
 </script>
 </body>
 </html>
