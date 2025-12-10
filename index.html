@@ -1,988 +1,1074 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>TheGame — учёт доходов</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
-
-<style>
-    body {
-        background: #0d0d0d;
-        color: white;
-        font-family: system-ui, sans-serif;
-    }
-    .tab-active {
-        background: #1f1f1f;
-        color: #fff !important;
-        font-weight: 600;
-    }
-    thead {
-        position: sticky;
-        top: 48px;
-        background: #1a1a1a;
-        z-index: 10;
-    }
-    tfoot {
-        position: sticky;
-        bottom: 0;
-        background: #111;
-    }
-    .floating-add {
-        position: fixed;
-        right: 20px;
-        bottom: 20px;
-        background: #10b981;
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        font-size: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        z-index: 999;
-        box-shadow: 0 0 12px rgba(0,255,170,0.4);
-    }
-    .profit-green { color: #22c55e; }
-    .profit-red { color: #ef4444; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TheGame — Учёт доходов</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
+<body class="bg-slate-900 text-white">
+  <div id="root"></div>
 
-<body class="pb-20">
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const tg = window.Telegram?.WebApp;
 
-<!-- ========================= HEADER ========================= -->
-<header class="fixed top-0 left-0 right-0 z-50 bg-black border-b border-gray-800">
-    <div class="p-4 flex flex-col">
-        <h1 class="text-xl font-bold">💰 TheGame — путь к 1М</h1>
-        <div class="w-full bg-gray-700 h-3 rounded mt-2">
-            <div id="goalProgress" class="h-3 bg-green-500 rounded" style="width:0%"></div>
-        </div>
-        <div class="text-sm mt-1" id="goalText">0₽ → 1,000,000₽</div>
-    </div>
+    // UI icons (simple)
+    const Icon = ({children}) => <span className="inline-block align-middle mr-2">{children}</span>;
 
-    <!-- ========================= TABS ========================= -->
-    <nav id="tabs" class="flex overflow-x-auto border-t border-gray-800">
-        <button class="px-4 py-2" data-tab="monthly">📅 Месячный отчёт</button>
-        <button class="px-4 py-2" data-tab="dolgo">🏃 Долголетие</button>
-        <button class="px-4 py-2" data-tab="indi">👤 Индивидуалки</button>
-        <button class="px-4 py-2" data-tab="arenda">🏠 Аренда</button>
-        <button class="px-4 py-2" data-tab="exp">💸 Расходы</button>
-        <button class="px-4 py-2" data-tab="passive">💰 Пассив</button>
-        <button class="px-4 py-2" data-tab="students">👥 Ученики</button>
-        <button class="px-4 py-2" data-tab="analytics">📊 Аналитика</button>
-        <button class="px-4 py-2" data-tab="months">📆 По месяцам</button>
-        <button class="px-4 py-2" data-tab="summary">📈 Сводка</button>
-    </nav>
-</header>
+    function App() {
+      const [activeTab, setActiveTab] = useState('monthlyReport'); // default main
+      const [loading, setLoading] = useState(true);
 
-<div class="mt-[120px]"></div>
+      // Data states
+      const [dolgo, setDolgo] = useState([]); // Московское долголетие (array of sessions)
+      const [individuals, setIndividuals] = useState([]); // индивидуалки (detailed)
+      const [rentals, setRentals] = useState([]); // аренда зала (income)
+      const [expenses, setExpenses] = useState([]); // постоянные расходы
+      const [passive, setPassive] = useState([]); // пассивный доход
+      const [students, setStudents] = useState([]); // база учеников
+      const [monthlyArchive, setMonthlyArchive] = useState([]); // по месяцам (архив)
 
-<!-- ============================================================
-================== ВСЕ ВКЛАДКИ ================================
-=============================================================== -->
+      // Modal form state
+      const [showModal, setShowModal] = useState(false);
+      const [modalType, setModalType] = useState(null);
+      const [editingIndex, setEditingIndex] = useState(null);
+      const [form, setForm] = useState({});
 
-<!-- =============== 1. МЕСЯЧНЫЙ ОТЧЁТ ================= -->
-<section id="monthly" class="p-4 hidden">
-    <h2 class="text-xl mb-4 font-bold">📅 Месячный отчёт</h2>
-    <table class="w-full text-sm">
-        <thead>
-            <tr class="text-left text-gray-300">
-                <th>Категория</th><th>Доход</th><th>Расход</th><th>Прибыль</th>
-            </tr>
-        </thead>
-        <tbody id="monthlyTable"></tbody>
-        <tfoot>
-            <tr class="font-bold bg-black text-white">
-                <td>ИТОГО</td>
-                <td id="mTotalIncome">0</td>
-                <td id="mTotalExpense">0</td>
-                <td id="mTotalProfit">0</td>
-            </tr>
-        </tfoot>
-    </table>
-</section>
+      // Locations and default hall expense mapping per spec
+      const locationDefaults = {
+        "Буденного": 0,
+        "Черкизовская": 0, // оплачивают педагоги
+        "Парк": 0
+      };
 
-<!-- =============== 2. ДОЛГОЛЕТИЕ ================= -->
-<section id="dolgo" class="p-4 hidden">
-    <div class="flex items-center justify-between">
-        <h2 class="text-xl font-bold mb-4">🏃 Московское долголетие</h2>
-        <input id="searchDolgo" placeholder="Поиск..." class="px-3 py-1 bg-gray-800 rounded">
-    </div>
-
-    <table class="w-full text-sm">
-        <thead>
-            <tr class="text-left text-gray-300">
-                <th>Дата</th><th>Локация</th><th>Педагог</th><th>Ставка</th><th>Людей</th>
-                <th>Доход</th><th>Расход пед.</th><th>Зал</th><th>Прибыль</th><th></th>
-            </tr>
-        </thead>
-        <tbody id="dolgoTable"></tbody>
-        <tfoot>
-            <tr class="bg-black font-bold">
-                <td colspan="5">ИТОГО:</td>
-                <td id="dolgoIncome"></td>
-                <td id="dolgoTeacher"></td>
-                <td id="dolgoHall"></td>
-                <td id="dolgoProfit"></td>
-                <td></td>
-            </tr>
-        </tfoot>
-    </table>
-</section>
-
-<!-- =============== 3. ИНДИ ================= -->
-<section id="indi" class="p-4 hidden">
-    <div class="flex items-center justify-between">
-        <h2 class="text-xl font-bold mb-4">👤 Индивидуальные</h2>
-        <input id="searchIndi" placeholder="Поиск..." class="px-3 py-1 bg-gray-800 rounded">
-    </div>
-    <table class="w-full text-sm">
-        <thead>
-            <tr class="text-left text-gray-300">
-                <th>Дата</th><th>Тип</th><th>Клиент</th><th>Сумма</th><th></th>
-            </tr>
-        </thead>
-        <tbody id="indiTable"></tbody>
-        <tfoot>
-            <tr class="bg-black font-bold">
-                <td colspan="3">ИТОГО:</td>
-                <td id="indiTotal"></td>
-                <td></td>
-            </tr>
-        </tfoot>
-    </table>
-</section>
-
-<!-- =============== 4. АРЕНДА ================= -->
-<section id="arenda" class="p-4 hidden">
-    <div class="flex items-center justify-between">
-        <h2 class="text-xl font-bold mb-4">🏠 Аренда</h2>
-        <input id="searchArenda" placeholder="Поиск..." class="px-3 py-1 bg-gray-800 rounded">
-    </div>
-
-    <table class="w-full text-sm">
-        <thead>
-            <tr class="text-left text-gray-300">
-                <th>Дата</th><th>Имя</th><th>Сумма</th><th></th>
-            </tr>
-        </thead>
-        <tbody id="arendaTable"></tbody>
-        <tfoot>
-            <tr class="bg-black font-bold">
-                <td colspan="2">ИТОГО:</td>
-                <td id="arendaTotal"></td>
-                <td></td>
-            </tr>
-        </tfoot>
-    </table>
-</section>
-
-<!-- =============== 5. РАСХОДЫ ================= -->
-<section id="exp" class="p-4 hidden">
-    <div class="flex items-center justify-between">
-        <h2 class="text-xl font-bold mb-4">💸 Расходы</h2>
-        <input id="searchExp" placeholder="Поиск..." class="px-3 py-1 bg-gray-800 rounded">
-    </div>
-
-    <table class="w-full text-sm">
-        <thead>
-            <tr class="text-left text-gray-300">
-                <th>Дата</th><th>Тип</th><th>Что</th><th>Сумма</th><th></th>
-            </tr>
-        </thead>
-        <tbody id="expTable"></tbody>
-        <tfoot>
-            <tr class="bg-black font-bold">
-                <td colspan="3">ИТОГО:</td>
-                <td id="expTotal"></td>
-                <td></td>
-            </tr>
-        </tfoot>
-    </table>
-</section>
-
-<!-- =============== 6. ПАССИВ ================= -->
-<section id="passive" class="p-4 hidden">
-    <div class="flex items-center justify-between">
-        <h2 class="text-xl font-bold mb-4">💰 Пассивный доход</h2>
-        <input id="searchPassive" placeholder="Поиск..." class="px-3 py-1 bg-gray-800 rounded">
-    </div>
-
-    <table class="w-full text-sm">
-        <thead>
-            <tr class="text-left text-gray-300">
-                <th>Дата</th><th>Источник</th><th>Сумма</th><th></th>
-            </tr>
-        </thead>
-        <tbody id="passiveTable"></tbody>
-        <tfoot>
-            <tr class="bg-black font-bold">
-                <td colspan="2">ИТОГО:</td>
-                <td id="passiveTotal"></td>
-                <td></td>
-            </tr>
-        </tfoot>
-    </table>
-</section>
-
-<!-- =============== 7. УЧЕНИКИ ================= -->
-<section id="students" class="p-4 hidden">
-    <h2 class="text-xl font-bold mb-4">👥 База учеников</h2>
-
-    <div class="text-sm mb-2">
-        Всего: <span id="stAll">0</span> •  
-        Активных: <span id="stActive">0</span> •  
-        Средний доход: <span id="stAvg">0</span>
-    </div>
-
-    <table class="w-full text-sm">
-        <thead>
-            <tr class="text-left text-gray-300">
-                <th>Имя</th><th>Телефон</th><th>Группа</th><th>Абонемент</th><th>До</th><th>Статус</th><th></th>
-            </tr>
-        </thead>
-        <tbody id="studentsTable"></tbody>
-    </table>
-</section>
-
-<!-- =============== 8. АНАЛИТИКА ================= -->
-<section id="analytics" class="p-4 hidden">
-    <h2 class="text-xl font-bold mb-4">📊 Аналитика</h2>
-
-    <div id="analyticsContent" class="space-y-4 text-sm"></div>
-</section>
-
-<!-- =============== 9. ПО МЕСЯЦАМ ================= -->
-<section id="months" class="p-4 hidden">
-    <h2 class="text-xl font-bold mb-4">📆 По месяцам</h2>
-
-    <table class="w-full text-sm">
-        <thead>
-            <tr class="text-left text-gray-300">
-                <th>Месяц</th><th>Долг.</th><th>Индив.</th><th>Аренда</th><th>Пассив</th><th>Расходы</th><th>Прибыль</th><th></th>
-            </tr>
-        </thead>
-        <tbody id="monthsTable"></tbody>
-        <tfoot>
-            <tr class="bg-black text-white font-bold">
-                <td>ИТОГО</td>
-                <td id="mD"></td>
-                <td id="mI"></td>
-                <td id="mA"></td>
-                <td id="mP"></td>
-                <td id="mE"></td>
-                <td id="mPr"></td>
-                <td></td>
-            </tr>
-        </tfoot>
-    </table>
-</section>
-
-<!-- =============== 10. СВОДКА ================= -->
-<section id="summary" class="p-4 hidden">
-    <h2 class="text-xl font-bold mb-4">📈 Сводка</h2>
-
-    <div id="summaryContent" class="space-y-2 text-sm"></div>
-
-    <button 
-        onclick="exportCSV()" 
-        class="mt-4 bg-green-600 px-4 py-2 rounded text-black font-bold">
-        Экспорт CSV
-    </button>
-</section>
-
-<!-- =============== КНОПКА ДОБАВЛЕНИЯ ================= -->
-<div class="floating-add" onclick="openAddForm()">+</div>
-
-<!-- ========================= МОДАЛКА ===================== -->
-<div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
-    <div class="bg-gray-900 p-4 rounded w-full max-w-md">
-        <h3 id="modalTitle" class="text-lg font-bold mb-3"></h3>
-        <div id="modalForm"></div>
-
-        <div class="flex justify-between mt-4">
-            <button onclick="closeModal()" class="px-4 py-2 bg-gray-700 rounded">Отмена</button>
-            <button onclick="saveEntry()" class="px-4 py-2 bg-green-600 text-black rounded font-bold">Сохранить</button>
-        </div>
-    </div>
-</div>
-
-<!-- ========================= JAVASCRIPT ЛОГИКА ===================== -->
-<script>
-
-// ======================== СИСТЕМА ХРАНЕНИЯ ======================
-// CloudStorage + fallback → localStorage
-
-function saveData(key, value) {
-    if (window.Telegram?.WebApp?.cloudStorage) {
-        Telegram.WebApp.cloudStorage.setItem(key, JSON.stringify(value), () => {});
-    }
-    localStorage.setItem(key, JSON.stringify(value));
-}
-
-function loadData(key, fallback = []) {
-    try {
-        if (window.Telegram?.WebApp?.cloudStorage) {
-            Telegram.WebApp.cloudStorage.getItem(key, (err, res) => {});
+      // Persist/load helpers (Telegram CloudStorage if available, else localStorage)
+      const loadKey = async (key, fallback) => {
+        try {
+          if (tg?.CloudStorage) {
+            return await new Promise((resolve) => {
+              tg.CloudStorage.getItem(key, (err, val) => {
+                if (!err && val) {
+                  try { resolve(JSON.parse(val)); } catch { resolve(fallback); }
+                } else resolve(fallback);
+              });
+            });
+          } else {
+            const raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : fallback;
+          }
+        } catch {
+          return fallback;
         }
-    } catch (e) {}
-    return JSON.parse(localStorage.getItem(key) || "[]");
-}
+      };
 
-// ======================= ДАННЫЕ ======================
-let data = {
-    dolgo: loadData("dolgo"),
-    indi: loadData("indi"),
-    arenda: loadData("arenda"),
-    exp: loadData("exp"),
-    passive: loadData("passive"),
-    students: loadData("students"),
-    months: loadData("months")
-};
+      const saveKey = async (key, data) => {
+        try {
+          const val = JSON.stringify(data);
+          if (tg?.CloudStorage) tg.CloudStorage.setItem(key, val);
+          localStorage.setItem(key, val);
+        } catch (e) {
+          console.error('saveKey error', e);
+        }
+      };
 
-// Текущая вкладка и текущая запись для редактирования
-let currentTab = "monthly";
-let editing = null;
+      useEffect(() => {
+        (async () => {
+          const [
+            _dolgo, _ind, _rent, _exp, _pass, _stud, _arch
+          ] = await Promise.all([
+            loadKey('dolgo', []),
+            loadKey('individuals', []),
+            loadKey('rentals', []),
+            loadKey('expenses', []),
+            loadKey('passive', []),
+            loadKey('students', []),
+            loadKey('monthlyArchive', [])
+          ]);
+          setDolgo(_dolgo);
+          setIndividuals(_ind);
+          setRentals(_rent);
+          setExpenses(_exp);
+          setPassive(_pass);
+          setStudents(_stud);
+          setMonthlyArchive(_arch);
+          setLoading(false);
+          try { tg?.expand && tg.expand(); } catch {}
+        })();
+      }, []);
 
-// ======================= ОТРИСОВКА ВКЛАДОК ======================
-document.querySelectorAll("#tabs button").forEach(btn => {
-    btn.addEventListener("click", () => {
-        document.querySelectorAll("#tabs button").forEach(b => b.classList.remove("tab-active"));
-        btn.classList.add("tab-active");
+      // Autosave
+      useEffect(()=> { if(!loading) saveKey('dolgo', dolgo); }, [dolgo]);
+      useEffect(()=> { if(!loading) saveKey('individuals', individuals); }, [individuals]);
+      useEffect(()=> { if(!loading) saveKey('rentals', rentals); }, [rentals]);
+      useEffect(()=> { if(!loading) saveKey('expenses', expenses); }, [expenses]);
+      useEffect(()=> { if(!loading) saveKey('passive', passive); }, [passive]);
+      useEffect(()=> { if(!loading) saveKey('students', students); }, [students]);
+      useEffect(()=> { if(!loading) saveKey('monthlyArchive', monthlyArchive); }, [monthlyArchive]);
 
-        currentTab = btn.dataset.tab;
+      // Helpers: format
+      const fmt = (n) => new Intl.NumberFormat('ru-RU').format(Number(n || 0));
 
-        document.querySelectorAll("section").forEach(sec => sec.classList.add("hidden"));
-        document.getElementById(currentTab).classList.remove("hidden");
+      // Business logic calculations
+      // For "Долголетие" row: income = people * 280
+      // teacher expense depends on rate selection:
+      // '50%' => income * 0.5
+      // '700' => 700
+      // '1000' => 1000
+      // '100%' => income * 1.0
+      const calcTeacherExpense = (income, rate) => {
+        if (!rate) return 0;
+        if (rate === '50%') return Math.round(income * 0.5);
+        if (rate === '700') return 700;
+        if (rate === '1000') return 1000;
+        if (rate === '100%') return Math.round(income * 1.0);
+        // fallback numeric
+        const parsed = parseFloat(rate);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
 
-        render();
-    });
-});
-document.querySelector('#tabs button[data-tab="monthly"]').classList.add("tab-active");
-document.getElementById("monthly").classList.remove("hidden");
+      // Totals per section
+      const totalDolgoIncome = dolgo.reduce((s,r)=> s + (Number(r.income)||0), 0);
+      const totalDolgoTeacherExpense = dolgo.reduce((s,r)=> s + calcTeacherExpense(Number(r.income)||0, r.rate), 0);
+      const totalDolgoHallExpense = dolgo.reduce((s,r)=> s + (Number(r.hallExpense)||0), 0);
+      const totalDolgoProfit = totalDolgoIncome - totalDolgoTeacherExpense - totalDolgoHallExpense;
 
-// ======================= ПЕРЕРИСОВКА ВСЕГО ======================
-function render() {
-    renderDolgo();
-    renderIndi();
-    renderArenda();
-    renderExp();
-    renderPassive();
-    renderStudents();
-    renderMonths();
-    renderMonthly();
-    renderSummary();
-    updateAnalytics();
-    updateGoal();
-}
+      const totalIndividualIncome = individuals.reduce((s,r)=> s + (Number(r.amount)||0), 0);
+      const totalRentalsIncome = rentals.reduce((s,r)=> s + (Number(r.amount)||0), 0);
+      const totalPassiveIncome = passive.reduce((s,r)=> s + (Number(r.monthly)||0), 0);
+      const totalExpenses = expenses.reduce((s,r)=> s + (Number(r.amount)||0), 0);
 
-// ======================= РАСЧЁТ ЦЕЛИ 1М ======================
-function updateGoal() {
-    const profit = calculateTotalProfit();
-    const percent = Math.min(100, (profit / 1_000_000) * 100);
-    document.getElementById("goalProgress").style.width = percent + "%";
-    document.getElementById("goalText").innerText = profit + "₽ → 1,000,000₽";
-}
+      // Monthly report aggregation: categories per spec
+      const monthlyReport = [
+        { category: 'Московское долголетие', income: totalDolgoIncome, expense: totalDolgoTeacherExpense + totalDolgoHallExpense, profit: totalDolgoProfit },
+        { category: 'Индивидуальные уроки', income: totalIndividualIncome, expense: 0, profit: totalIndividualIncome },
+        { category: 'Аренда зала', income: totalRentalsIncome, expense: 0, profit: totalRentalsIncome },
+        { category: 'Пассивный', income: totalPassiveIncome, expense: 0, profit: totalPassiveIncome },
+        { category: 'Расходы', income: 0, expense: totalExpenses, profit: -totalExpenses },
+      ];
+      const totalReportIncome = monthlyReport.reduce((s,r)=> s + (r.income||0), 0);
+      const totalReportExpense = monthlyReport.reduce((s,r)=> s + (r.expense||0), 0);
+      const totalReportProfit = monthlyReport.reduce((s,r)=> s + (r.profit||0), 0);
 
-// ======================= РЕНДЕР КАЖДОЙ ТАБЛИЦЫ ======================
-// Долголетие
-function renderDolgo() {
-    const table = document.getElementById("dolgoTable");
-    table.innerHTML = "";
+      // Analytics: top teachers/clubs by profit (build mapping)
+      // We'll aggregate profit per teacher/club from dolgo and individuals:
+      const profitMap = {};
+      dolgo.forEach(r=>{
+        const profit = (Number(r.income)||0) - calcTeacherExpense(Number(r.income)||0, r.rate) - (Number(r.hallExpense)||0);
+        const name = r.teacher || r.location || 'Без имени';
+        profitMap[name] = (profitMap[name]||0) + profit;
+      });
+      // treat rentals as club profit (renter name)
+      rentals.forEach(r=>{
+        const name = r.name || 'Аренда';
+        profitMap[name] = (profitMap[name]||0) + (Number(r.amount)||0);
+      });
+      // individuals: attribute to 'Индивидуалки' or client? We'll group under 'Индивидуалки' and by teacher if present
+      individuals.forEach(r=>{
+        const teacher = r.teacher || 'Индивидуалки';
+        profitMap[teacher] = (profitMap[teacher]||0) + (Number(r.amount)||0);
+      });
 
-    let inc = 0, tch = 0, hall = 0, prf = 0;
+      const topList = Object.entries(profitMap)
+        .map(([key,val])=> ({name:key, profit: Math.round(val)}))
+        .sort((a,b)=> b.profit - a.profit)
+        .slice(0,10);
+      const topTotal = topList.reduce((s,r)=> s + r.profit, 0);
+      const topWithShare = topList.map(t=> ({...t, share: topTotal ? Math.round((t.profit / topTotal)*100) : 0}));
 
-    data.dolgo.forEach((r, i) => {
-        inc += +r.income;
-        tch += +r.teacher;
-        hall += +r.hall;
-        prf += +r.profit;
+      // Students stats
+      const totalStudents = students.length;
+      const activeStudents = students.filter(s=> s.status === 'Активный').length;
+      const avgIncomePerStudent = totalStudents ? Math.round((totalReportProfit + totalIndividualIncome + totalPassiveIncome - totalExpenses) / totalStudents) : 0;
 
-        table.innerHTML += `
-            <tr>
-                <td>${r.date}</td>
-                <td>${r.loc}</td>
-                <td>${r.teacherName}</td>
-                <td>${r.rate}</td>
-                <td>${r.people}</td>
-                <td>${r.income}</td>
-                <td>${r.teacher}</td>
-                <td>${r.hall}</td>
-                <td class="${r.profit >= 0 ? "profit-green" : "profit-red"}">${r.profit}</td>
-                <td>
-                    <button onclick="editEntry('dolgo', ${i})" class="text-blue-400">✏</button>
-                    <button onclick="deleteEntry('dolgo', ${i})" class="text-red-400">✖</button>
-                </td>
-            </tr>
-        `;
-    });
+      // Progress to 1M (per spec, initial 385,000 is starting amount - but better compute from current profit sum)
+      const baseStart = 385000;
+      const currentTotal = baseStart + (totalReportProfit); // simple approach
+      const goal = 1000000;
+      const progressPercent = Math.round((currentTotal / goal) * 100);
 
-    document.getElementById("dolgoIncome").innerText = inc;
-    document.getElementById("dolgoTeacher").innerText = tch;
-    document.getElementById("dolgoHall").innerText = hall;
-    document.getElementById("dolgoProfit").innerText = prf;
-}
+      // Modal open
+      const openModal = (type, idx = null) => {
+        setModalType(type);
+        setEditingIndex(idx);
+        let data = {};
+        if (idx !== null) {
+          if (type === 'dolgo') data = {...dolgo[idx]};
+          if (type === 'individual') data = {...individuals[idx]};
+          if (type === 'rental') data = {...rentals[idx]};
+          if (type === 'expense') data = {...expenses[idx]};
+          if (type === 'passive') data = {...passive[idx]};
+          if (type === 'student') data = {...students[idx]};
+          if (type === 'archive') data = {...monthlyArchive[idx]};
+        } else {
+          // default empty
+          data = {};
+        }
+        setForm(data);
+        setShowModal(true);
+      };
 
-// Индивидуальные
-function renderIndi() {
-    const t = document.getElementById("indiTable");
-    t.innerHTML = "";
+      const closeModal = () => { setShowModal(false); setForm({}); setEditingIndex(null); setModalType(null); };
 
-    let total = 0;
+      // Save modal data
+      const saveModal = () => {
+        if (modalType === 'dolgo') {
+          // required fields: date, location, teacher, rate, people, hallExpense (editable)
+          const people = Number(form.people || 0);
+          const income = people * 280;
+          const row = {
+            date: form.date || '',
+            location: form.location || '',
+            teacher: form.teacher || '',
+            rate: form.rate || '50%',
+            people,
+            income,
+            hallExpense: Number(form.hallExpense || locationDefaults[form.location] || 0),
+            comment: form.comment || ''
+          };
+          if (editingIndex !== null) {
+            const copy = [...dolgo]; copy[editingIndex] = row; setDolgo(copy);
+          } else {
+            setDolgo([...dolgo, row]);
+          }
+        }
+        if (modalType === 'individual') {
+          const row = {
+            date: form.date || '',
+            type: form.type || 'Остальные',
+            client: form.client || '',
+            teacher: form.teacher || '',
+            amount: Number(form.amount || 0),
+            comment: form.comment || ''
+          };
+          if (editingIndex !== null) {
+            const copy = [...individuals]; copy[editingIndex] = row; setIndividuals(copy);
+          } else setIndividuals([...individuals, row]);
+        }
+        if (modalType === 'rental') {
+          const row = {
+            date: form.date || '',
+            name: form.name || '',
+            amount: Number(form.amount || 0),
+            comment: form.comment || ''
+          };
+          if (editingIndex !== null) { const copy=[...rentals]; copy[editingIndex]=row; setRentals(copy); }
+          else setRentals([...rentals, row]);
+        }
+        if (modalType === 'expense') {
+          const row = {
+            date: form.date || '',
+            type: form.type || '',
+            what: form.what || '',
+            amount: Number(form.amount || 0),
+            comment: form.comment || ''
+          };
+          if (editingIndex !== null) { const copy=[...expenses]; copy[editingIndex]=row; setExpenses(copy); }
+          else setExpenses([...expenses, row]);
+        }
+        if (modalType === 'passive') {
+          const row = {
+            date: form.date || '',
+            source: form.source || '',
+            monthly: Number(form.monthly || 0),
+            comment: form.comment || ''
+          };
+          if (editingIndex !== null) { const copy=[...passive]; copy[editingIndex]=row; setPassive(copy); }
+          else setPassive([...passive, row]);
+        }
+        if (modalType === 'student') {
+          const row = {
+            name: form.name || '',
+            phone: form.phone || '',
+            group: form.group || '',
+            subscription: form.subscription || '',
+            expiry: form.expiry || '',
+            status: form.status || 'Активный',
+            note: form.note || ''
+          };
+          if (editingIndex !== null) { const copy=[...students]; copy[editingIndex]=row; setStudents(copy); }
+          else setStudents([...students, row]);
+        }
+        if (modalType === 'archive') {
+          const groupIncome = Number(form.groupIncome||0);
+          const individualIncome = Number(form.individualIncome||0);
+          const passiveIncome = Number(form.passiveIncome||0);
+          const expensesVal = Number(form.expenses||0);
+          const profit = groupIncome + individualIncome + passiveIncome - expensesVal;
+          const row = {
+            month: form.month || '',
+            year: form.year || '',
+            groupIncome, individualIncome, passiveIncome,
+            expenses: expensesVal,
+            profit,
+            note: form.note || ''
+          };
+          if (editingIndex !== null) { const copy=[...monthlyArchive]; copy[editingIndex]=row; setMonthlyArchive(copy); }
+          else setMonthlyArchive([...monthlyArchive, row]);
+        }
 
-    data.indi.forEach((r, i) => {
-        total += +r.sum;
+        closeModal();
+      };
 
-        t.innerHTML += `
-            <tr>
-                <td>${r.date}</td>
-                <td>${r.type}</td>
-                <td>${r.client}</td>
-                <td>${r.sum}</td>
-                <td>
-                    <button onclick="editEntry('indi', ${i})" class="text-blue-400">✏</button>
-                    <button onclick="deleteEntry('indi', ${i})" class="text-red-400">✖</button>
-                </td>
-            </tr>
-        `;
-    });
-    document.getElementById("indiTotal").innerText = total;
-}
+      const deleteItem = (type, idx) => {
+        if (!confirm('Удалить запись?')) return;
+        if (type === 'dolgo') setDolgo(dolgo.filter((_,i)=>i!==idx));
+        if (type === 'individual') setIndividuals(individuals.filter((_,i)=>i!==idx));
+        if (type === 'rental') setRentals(rentals.filter((_,i)=>i!==idx));
+        if (type === 'expense') setExpenses(expenses.filter((_,i)=>i!==idx));
+        if (type === 'passive') setPassive(passive.filter((_,i)=>i!==idx));
+        if (type === 'student') setStudents(students.filter((_,i)=>i!==idx));
+        if (type === 'archive') setMonthlyArchive(monthlyArchive.filter((_,i)=>i!==idx));
+      };
 
-// Аренда
-function renderArenda() {
-    const t = document.getElementById("arendaTable");
-    t.innerHTML = "";
+      const exportCSV = () => {
+        let csv = 'Категория,Доход,Расход,Прибыль\n';
+        monthlyReport.forEach(row=>{
+          csv += `${row.category},${row.income},${row.expense},${row.profit}\n`;
+        });
+        csv += `\nИТОГО,${totalReportIncome},${totalReportExpense},${totalReportProfit}\n`;
+        // create and download
+        const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'thegame_monthly_report.csv'; a.click();
+        URL.revokeObjectURL(url);
+      };
 
-    let total = 0;
+      if (loading) {
+        return <div className="min-h-screen flex items-center justify-center"><div>Загрузка...</div></div>;
+      }
 
-    data.arenda.forEach((r, i) => {
-        total += +r.sum;
-
-        t.innerHTML += `
-            <tr>
-                <td>${r.date}</td>
-                <td>${r.name}</td>
-                <td>${r.sum}</td>
-                <td>
-                    <button onclick="editEntry('arenda', ${i})" class="text-blue-400">✏</button>
-                    <button onclick="deleteEntry('arenda', ${i})" class="text-red-400">✖</button>
-                </td>
-            </tr>
-        `;
-    });
-    document.getElementById("arendaTotal").innerText = total;
-}
-
-// Расходы
-function renderExp() {
-    const t = document.getElementById("expTable");
-    t.innerHTML = "";
-
-    let total = 0;
-
-    data.exp.forEach((r, i) => {
-        total += +r.sum;
-
-        t.innerHTML += `
-            <tr>
-                <td>${r.date}</td>
-                <td>${r.type}</td>
-                <td>${r.what}</td>
-                <td>${r.sum}</td>
-                <td>
-                    <button onclick="editEntry('exp', ${i})" class="text-blue-400">✏</button>
-                    <button onclick="deleteEntry('exp', ${i})" class="text-red-400">✖</button>
-                </td>
-            </tr>
-        `;
-    });
-    document.getElementById("expTotal").innerText = total;
-}
-
-// Пассив
-function renderPassive() {
-    const t = document.getElementById("passiveTable");
-    t.innerHTML = "";
-
-    let total = 0;
-
-    data.passive.forEach((r, i) => {
-        total += +r.sum;
-
-        t.innerHTML += `
-            <tr>
-                <td>${r.date}</td>
-                <td>${r.src}</td>
-                <td>${r.sum}</td>
-                <td>
-                    <button onclick="editEntry('passive', ${i})" class="text-blue-400">✏</button>
-                    <button onclick="deleteEntry('passive', ${i})" class="text-red-400">✖</button>
-                </td>
-            </tr>
-        `;
-    });
-    document.getElementById("passiveTotal").innerText = total;
-}
-
-// Ученики
-function renderStudents() {
-    const t = document.getElementById("studentsTable");
-    t.innerHTML = "";
-
-    let act = 0;
-
-    data.students.forEach((r, i) => {
-        if (r.status === "Активный") act++;
-
-        t.innerHTML += `
-            <tr>
-                <td>${r.name}</td>
-                <td>${r.phone}</td>
-                <td>${r.group}</td>
-                <td>${r.abon}</td>
-                <td>${r.until}</td>
-                <td>${r.status}</td>
-                <td>
-                    <button onclick="editEntry('students', ${i})" class="text-blue-400">✏</button>
-                    <button onclick="deleteEntry('students', ${i})" class="text-red-400">✖</button>
-                </td>
-            </tr>
-        `;
-    });
-
-    document.getElementById("stAll").innerText = data.students.length;
-    document.getElementById("stActive").innerText = act;
-    document.getElementById("stAvg").innerText = (calculateTotalProfit() / (act || 1)).toFixed(0);
-}
-
-// Месяцы
-function renderMonths() {
-    const t = document.getElementById("monthsTable");
-    t.innerHTML = "";
-
-    let d=0,i=0,a=0,p=0,e=0,pr=0;
-
-    data.months.forEach((r, idx) => {
-        d+=+r.d;
-        i+=+r.i;
-        a+=+r.a;
-        p+=+r.p;
-        e+=+r.e;
-        pr+=+r.pr;
-
-        t.innerHTML += `
-            <tr>
-                <td>${r.m}/${r.y}</td>
-                <td>${r.d}</td>
-                <td>${r.i}</td>
-                <td>${r.a}</td>
-                <td>${r.p}</td>
-                <td>${r.e}</td>
-                <td>${r.pr}</td>
-                <td>
-                    <button onclick="editEntry('months', ${idx})" class="text-blue-400">✏</button>
-                    <button onclick="deleteEntry('months', ${idx})" class="text-red-400">✖</button>
-                </td>
-            </tr>
-        `;
-    });
-
-    document.getElementById("mD").innerText = d;
-    document.getElementById("mI").innerText = i;
-    document.getElementById("mA").innerText = a;
-    document.getElementById("mP").innerText = p;
-    document.getElementById("mE").innerText = e;
-    document.getElementById("mPr").innerText = pr;
-}
-
-// Месячный отчёт
-function renderMonthly() {
-    const t = document.getElementById("monthlyTable");
-
-    let dIn=0, dEx=0, dPr=0;
-
-    // Долголетие
-    let incD = data.dolgo.reduce((a,b)=>a+Number(b.income),0);
-    let tchD = data.dolgo.reduce((a,b)=>a+Number(b.teacher),0);
-    let hallD = data.dolgo.reduce((a,b)=>a+Number(b.hall),0);
-    let prD = incD - tchD - hallD;
-
-    // Индивидуалки
-    let incI = data.indi.reduce((a,b)=>a+Number(b.sum),0);
-
-    // Аренда
-    let incA = data.arenda.reduce((a,b)=>a+Number(b.sum),0);
-
-    // Пассив
-    let incP = data.passive.reduce((a,b)=>a+Number(b.sum),0);
-
-    // Расходы
-    let ex = data.exp.reduce((a,b)=>a+Number(b.sum),0);
-
-    t.innerHTML = `
-        <tr><td>Долголетие</td><td>${incD}</td><td>${tchD+hallD}</td><td>${prD}</td></tr>
-        <tr><td>Индивидуальные</td><td>${incI}</td><td>0</td><td>${incI}</td></tr>
-        <tr><td>Аренда</td><td>${incA}</td><td>0</td><td>${incA}</td></tr>
-        <tr><td>Пассивный</td><td>${incP}</td><td>0</td><td>${incP}</td></tr>
-        <tr><td>Расходы</td><td>0</td><td>${ex}</td><td>-${ex}</td></tr>
-    `;
-
-    let inc = incD + incI + incA + incP;
-    let exT = ex + tchD + hallD;
-    let pr = inc - exT;
-
-    document.getElementById("mTotalIncome").innerText = inc;
-    document.getElementById("mTotalExpense").innerText = exT;
-    document.getElementById("mTotalProfit").innerText = pr;
-}
-
-// Итоговая прибыль
-function calculateTotalProfit() {
-    let total = 0;
-    data.dolgo.forEach(r => total += +r.profit);
-    data.indi.forEach(r => total += +r.sum);
-    data.arenda.forEach(r => total += +r.sum);
-    data.passive.forEach(r => total += +r.sum);
-    data.exp.forEach(r => total -= +r.sum);
-    return total;
-}
-
-// ======================= АНАЛИТИКА ==========================
-function updateAnalytics() {
-    const el = document.getElementById("analyticsContent");
-    el.innerHTML = "";
-
-    const profit = calculateTotalProfit();
-
-    // Топ педагогов
-    const profitMap = {
-        "Долголетие": data.dolgo.reduce((a,b)=>a+Number(b.profit),0),
-        "Индивидуалки": data.indi.reduce((a,b)=>a+Number(b.sum),0),
-        "Аренда": data.arenda.reduce((a,b)=>a+Number(b.sum),0)
-    };
-
-    const sorted = Object.entries(profitMap).sort((a,b)=>b[1]-a[1]);
-
-    el.innerHTML += `
-        <div class="bg-gray-800 p-3 rounded">
-            <div class="font-bold mb-2">Финансы</div>
-            <div>Доход: ${document.getElementById("mTotalIncome").innerText}₽</div>
-            <div>Прибыль: ${profit}₽</div>
-            <div>Рентабельность: ${(profit / (profit+1e-9) * 100).toFixed(0)}%</div>
-        </div>
-
-        <div class="bg-gray-800 p-3 rounded">
-            <div class="font-bold mb-2">ТОП направлений</div>
-            ${sorted.map(([name,val]) => `
-                <div class="flex justify-between border-b border-gray-700 py-1">
-                    <span>${name}</span>
-                    <span>${val}₽</span>
+      // UI components (kept inline but organized)
+      return (
+        <div className="min-h-screen p-4">
+          <div className="max-w-6xl mx-auto">
+            <header className="mb-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold">💰 TheGame — Учёт доходов</h1>
+                  <div className="text-sm text-slate-400">Путь к 1М</div>
                 </div>
-            `).join("")}
+                <div className="text-right">
+                  <div className="text-sm text-slate-400">Прогресс к цели</div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-56 bg-slate-700 h-4 rounded">
+                      <div className="h-4 rounded bg-gradient-to-r from-blue-500 to-green-400" style={{width: `${Math.min(progressPercent,100)}%`}}></div>
+                    </div>
+                    <div className="text-sm font-bold">{progressPercent}%</div>
+                  </div>
+                  <div className="text-xs text-slate-400"> {fmt(currentTotal)}₽ → {fmt(goal)}₽</div>
+                </div>
+              </div>
+
+              <nav className="mt-4 flex flex-wrap gap-2">
+                {[
+                  {id:'monthlyReport', title:'Месячный отчёт'},
+                  {id:'dolgo', title:'Московское долголетие'},
+                  {id:'individuals', title:'Индивидуальные уроки'},
+                  {id:'rentals', title:'Аренда зала'},
+                  {id:'expenses', title:'Расходы'},
+                  {id:'passive', title:'Пассивный'},
+                  {id:'students', title:'База учеников'},
+                  {id:'analytics', title:'Аналитика'},
+                  {id:'archive', title:'По месяцам'},
+                  {id:'summary', title:'Сводка'},
+                ].map(t=>(
+                  <button
+                    key={t.id}
+                    onClick={()=>setActiveTab(t.id)}
+                    className={`px-3 py-1 rounded ${activeTab===t.id ? 'bg-blue-600' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                  >{t.title}</button>
+                ))}
+              </nav>
+            </header>
+
+            <main className="bg-slate-800 rounded p-4 border border-slate-700">
+              {activeTab === 'monthlyReport' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">📅 Месячный отчёт (сводка)</h2>
+                    <div className="flex gap-2">
+                      <button onClick={()=> setActiveTab('summary')} className="px-3 py-2 bg-slate-700 rounded">Перейти в сводку</button>
+                      <button onClick={exportCSV} className="px-3 py-2 bg-green-600 rounded">Экспорт CSV</button>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-slate-300 border-b border-slate-700">
+                          <th className="py-2 px-2">Категория</th>
+                          <th className="py-2 px-2 text-right">Доход</th>
+                          <th className="py-2 px-2 text-right">Расход</th>
+                          <th className="py-2 px-2 text-right">Прибыль</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlyReport.map((r,i)=>(
+                          <tr key={i} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.category}</td>
+                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.income)}₽</td>
+                            <td className="py-2 px-2 text-right text-red-400">-{fmt(r.expense)}₽</td>
+                            <td className="py-2 px-2 text-right text-blue-400 font-semibold">{fmt(r.profit)}₽</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50">
+                        <tr className="font-bold">
+                          <td className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalReportIncome)}₽</td>
+                          <td className="py-2 px-2 text-right text-red-400">-{fmt(totalReportExpense)}₽</td>
+                          <td className="py-2 px-2 text-right text-blue-400">{fmt(totalReportProfit)}₽</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'dolgo' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">🏃 Московское долголетие</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('dolgo')}>Добавить запись</button>
+                  </div>
+
+                  <div className="overflow-x-auto mb-4">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-700 text-slate-300">
+                          <th className="py-2 px-2">Дата</th>
+                          <th className="py-2 px-2">Локация</th>
+                          <th className="py-2 px-2">Педагог</th>
+                          <th className="py-2 px-2 text-right">Ставка</th>
+                          <th className="py-2 px-2 text-right">Людей</th>
+                          <th className="py-2 px-2 text-right">Доход</th>
+                          <th className="py-2 px-2 text-right">Расход пед.</th>
+                          <th className="py-2 px-2 text-right">Расход за зал</th>
+                          <th className="py-2 px-2 text-right">Прибыль</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dolgo.map((r,idx)=>{
+                          const teacherExpense = calcTeacherExpense(Number(r.income||0), r.rate);
+                          const profit = Number(r.income||0) - teacherExpense - Number(r.hallExpense||0);
+                          return (
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.date}</td>
+                            <td className="py-2 px-2">{r.location}</td>
+                            <td className="py-2 px-2">{r.teacher}</td>
+                            <td className="py-2 px-2 text-right">{r.rate}</td>
+                            <td className="py-2 px-2 text-right">{r.people}</td>
+                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.income)}₽</td>
+                            <td className="py-2 px-2 text-right text-red-400">{fmt(teacherExpense)}₽</td>
+                            <td className="py-2 px-2 text-right">{fmt(r.hallExpense)}₽</td>
+                            <td className="py-2 px-2 text-right text-blue-400 font-bold">{fmt(profit)}₽</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('dolgo', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('dolgo', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50 font-bold">
+                        <tr>
+                          <td colSpan="5" className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalDolgoIncome)}₽</td>
+                          <td className="py-2 px-2 text-right text-red-400">{fmt(totalDolgoTeacherExpense)}₽</td>
+                          <td className="py-2 px-2 text-right">{fmt(totalDolgoHallExpense)}₽</td>
+                          <td className="py-2 px-2 text-right text-blue-400">{fmt(totalDolgoProfit)}₽</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  <div className="text-sm text-slate-400">
+                    <div>Примечание: Доход = Людей × 280₽. Ставки педагога: 50% / 700 / 1000 / 100% — можно выбрать или ввести свое значение.</div>
+                    <div className="mt-2">Автозаполнение расхода за зал: Буденного → 0₽, Черкизовская → 0₽ (оплачивают педагоги), Парк → 0₽. Поле можно редактировать вручную.</div>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'individuals' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">👤 Индивидуальные уроки</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('individual')}>Добавить</button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-slate-300">
+                        <tr className="border-b border-slate-700">
+                          <th className="py-2 px-2">Дата</th>
+                          <th className="py-2 px-2">Тип</th>
+                          <th className="py-2 px-2">Клиент</th>
+                          <th className="py-2 px-2">Педагог</th>
+                          <th className="py-2 px-2 text-right">Сумма</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {individuals.map((r,idx)=>(
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.date}</td>
+                            <td className="py-2 px-2">{r.type}</td>
+                            <td className="py-2 px-2">{r.client}</td>
+                            <td className="py-2 px-2">{r.teacher || '—'}</td>
+                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.amount)}₽</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('individual', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('individual', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50 font-bold">
+                        <tr>
+                          <td colSpan="4" className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalIndividualIncome)}₽</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'rentals' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">🏠 Аренда зала</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('rental')}>Добавить аренду</button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-slate-300">
+                        <tr className="border-b border-slate-700">
+                          <th className="py-2 px-2">Дата</th>
+                          <th className="py-2 px-2">Имя</th>
+                          <th className="py-2 px-2 text-right">Сумма</th>
+                          <th className="py-2 px-2">Комментарий</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rentals.map((r,idx)=>(
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.date}</td>
+                            <td className="py-2 px-2">{r.name}</td>
+                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.amount)}₽</td>
+                            <td className="py-2 px-2 text-slate-400">{r.comment}</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('rental', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('rental', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50 font-bold">
+                        <tr>
+                          <td colSpan="2" className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalRentalsIncome)}₽</td>
+                          <td colSpan="2"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'expenses' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">💸 Расходы</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('expense')}>Добавить расход</button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-slate-300">
+                        <tr className="border-b border-slate-700">
+                          <th className="py-2 px-2">Дата</th>
+                          <th className="py-2 px-2">Тип</th>
+                          <th className="py-2 px-2">Что</th>
+                          <th className="py-2 px-2 text-right">Сумма</th>
+                          <th className="py-2 px-2">Комментарий</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expenses.map((r,idx)=>(
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.date}</td>
+                            <td className="py-2 px-2">{r.type}</td>
+                            <td className="py-2 px-2">{r.what}</td>
+                            <td className="py-2 px-2 text-right text-red-400">-{fmt(r.amount)}₽</td>
+                            <td className="py-2 px-2 text-slate-400">{r.comment}</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('expense', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('expense', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50 font-bold">
+                        <tr>
+                          <td colSpan="3" className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right text-red-400">-{fmt(totalExpenses)}₽</td>
+                          <td colSpan="2"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'passive' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">💰 Пассивный доход</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('passive')}>Добавить</button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-slate-300">
+                        <tr className="border-b border-slate-700">
+                          <th className="py-2 px-2">Дата</th>
+                          <th className="py-2 px-2">Источник</th>
+                          <th className="py-2 px-2 text-right">Сумма/мес</th>
+                          <th className="py-2 px-2">Комментарий</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {passive.map((r,idx)=>(
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.date}</td>
+                            <td className="py-2 px-2">{r.source}</td>
+                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.monthly)}₽</td>
+                            <td className="py-2 px-2 text-slate-400">{r.comment}</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('passive', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('passive', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50 font-bold">
+                        <tr>
+                          <td colSpan="2" className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalPassiveIncome)}₽</td>
+                          <td colSpan="2"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'students' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">👥 База учеников</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('student')}>Добавить ученика</button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div className="bg-slate-900 p-3 rounded">
+                      <div className="text-slate-400 text-sm">Всего учеников</div>
+                      <div className="text-2xl font-bold text-blue-400">{totalStudents}</div>
+                    </div>
+                    <div className="bg-slate-900 p-3 rounded">
+                      <div className="text-slate-400 text-sm">Активных</div>
+                      <div className="text-2xl font-bold text-green-400">{activeStudents}</div>
+                    </div>
+                    <div className="bg-slate-900 p-3 rounded">
+                      <div className="text-slate-400 text-sm">Средний доход</div>
+                      <div className="text-2xl font-bold text-yellow-400">{fmt(avgIncomePerStudent)}₽</div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-slate-300">
+                        <tr className="border-b border-slate-700">
+                          <th className="py-2 px-2">Имя</th>
+                          <th className="py-2 px-2">Телефон</th>
+                          <th className="py-2 px-2">Группа</th>
+                          <th className="py-2 px-2">Абонемент</th>
+                          <th className="py-2 px-2">Действует до</th>
+                          <th className="py-2 px-2">Статус</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {students.map((s,idx)=>(
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{s.name}</td>
+                            <td className="py-2 px-2">{s.phone}</td>
+                            <td className="py-2 px-2">{s.group}</td>
+                            <td className="py-2 px-2">{s.subscription}</td>
+                            <td className="py-2 px-2">{s.expiry}</td>
+                            <td className="py-2 px-2">{s.status}</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('student', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('student', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'analytics' && (
+                <section>
+                  <h2 className="text-lg font-bold mb-4">📊 Аналитика</h2>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-slate-900 p-4 rounded">
+                      <h3 className="text-sm text-green-400 font-bold mb-2">Финансы</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between"><span>Текущий доход (месяц):</span><b>{fmt(totalReportIncome)}₽</b></div>
+                        <div className="flex justify-between"><span>Чистая прибыль:</span><b className="text-blue-400">{fmt(totalReportProfit)}₽</b></div>
+                        <div className="flex justify-between"><span>Рентабельность:</span><b>{ totalReportIncome ? Math.round((totalReportProfit/totalReportIncome)*100) : 0 }%</b></div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900 p-4 rounded">
+                      <h3 className="text-sm text-blue-400 font-bold mb-2">Ученики</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between"><span>Всего учеников:</span><b>{totalStudents}</b></div>
+                        <div className="flex justify-between"><span>Активных:</span><b className="text-green-400">{activeStudents}</b></div>
+                        <div className="flex justify-between"><span>Средний доход с ученика:</span><b className="text-yellow-400">{fmt(avgIncomePerStudent)}₽</b></div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900 p-4 rounded">
+                      <h3 className="text-sm text-purple-400 font-bold mb-2">Цели</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between"><span>Текущий:</span><b>{fmt(currentTotal)}₽</b></div>
+                        <div className="flex justify-between"><span>Цель:</span><b>{fmt(goal)}₽</b></div>
+                        <div className="flex justify-between"><span>Осталось:</span><b className="text-red-400">{fmt(Math.max(goal - currentTotal,0))}₽</b></div>
+                        <div className="flex justify-between"><span>Прогресс:</span><b className="text-blue-400">{progressPercent}%</b></div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900 p-4 rounded">
+                      <h3 className="text-sm text-orange-400 font-bold mb-2">Рост</h3>
+                      <div className="text-xs text-slate-400">
+                        • Нужно увеличить доход на ~{fmt(Math.round((goal - currentTotal)/12))}₽/мес<br/>
+                        • Или привлечь ~{Math.round((goal - currentTotal) / (avgIncomePerStudent || 3000))} учеников (примерно)
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <h3 className="text-md font-bold mb-2">🆕 ТОП педагогов/клубов (по прибыли)</h3>
+                    {topWithShare.length === 0 ? <div className="text-slate-400">Нет данных</div> : (
+                      <div className="bg-slate-900 p-3 rounded">
+                        {topWithShare.map((t, i)=>(
+                          <div key={i} className="flex items-center gap-3 mb-2">
+                            <div className="w-8 text-slate-300">{i+1}.</div>
+                            <div className="flex-1">
+                              <div className="font-semibold">{t.name}</div>
+                              <div className="text-xs text-slate-400">{fmt(t.profit)}₽ — {t.share}%</div>
+                              <div className="w-full bg-slate-700 h-2 rounded mt-1">
+                                <div style={{width:`${t.share}%`}} className="h-2 bg-gradient-to-r from-blue-500 to-green-400 rounded"></div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-4 text-sm text-slate-400">Вывод: фокус на направлениях с наибольшей долей прибыли.</div>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'archive' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">📆 По месяцам (архив)</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('archive')}>Добавить месяц</button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-slate-300">
+                        <tr className="border-b border-slate-700">
+                          <th className="py-2 px-2">Месяц</th>
+                          <th className="py-2 px-2 text-right">Долголетие</th>
+                          <th className="py-2 px-2 text-right">Индивид.</th>
+                          <th className="py-2 px-2 text-right">Пассивный</th>
+                          <th className="py-2 px-2 text-right">Расходы</th>
+                          <th className="py-2 px-2 text-right">Прибыль</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlyArchive.map((r,idx)=>(
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.month} {r.year}</td>
+                            <td className="py-2 px-2 text-right">{fmt(r.groupIncome)}₽</td>
+                            <td className="py-2 px-2 text-right">{fmt(r.individualIncome)}₽</td>
+                            <td className="py-2 px-2 text-right">{fmt(r.passiveIncome)}₽</td>
+                            <td className="py-2 px-2 text-right">-{fmt(r.expenses)}₽</td>
+                            <td className="py-2 px-2 text-right text-blue-400 font-bold">{fmt(r.profit)}₽</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('archive', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('archive', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50 font-bold">
+                        <tr>
+                          <td className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right">{fmt(monthlyArchive.reduce((s,r)=>s+(r.groupIncome||0),0))}₽</td>
+                          <td className="py-2 px-2 text-right">{fmt(monthlyArchive.reduce((s,r)=>s+(r.individualIncome||0),0))}₽</td>
+                          <td className="py-2 px-2 text-right">{fmt(monthlyArchive.reduce((s,r)=>s+(r.passiveIncome||0),0))}₽</td>
+                          <td className="py-2 px-2 text-right">-{fmt(monthlyArchive.reduce((s,r)=>s+(r.expenses||0),0))}₽</td>
+                          <td className="py-2 px-2 text-right">{fmt(monthlyArchive.reduce((s,r)=>s+(r.profit||0),0))}₽</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'summary' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">📈 Сводка (текущее состояние)</h2>
+                    <button onClick={exportCSV} className="px-3 py-2 bg-green-600 rounded">Экспорт CSV</button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-slate-900 p-4 rounded">
+                      <div className="flex justify-between"><span>Долголетие (прибыль):</span><b>{fmt(totalDolgoProfit)}₽</b></div>
+                      <div className="flex justify-between"><span>Индивидуалки:</span><b>{fmt(totalIndividualIncome)}₽</b></div>
+                      <div className="flex justify-between"><span>Аренда зала:</span><b>{fmt(totalRentalsIncome)}₽</b></div>
+                      <div className="flex justify-between"><span>Пассивный доход:</span><b>{fmt(totalPassiveIncome)}₽</b></div>
+                      <div className="flex justify-between mt-2"><span>Расходы:</span><b className="text-red-400">-{fmt(totalExpenses)}₽</b></div>
+                      <div className="flex justify-between mt-4 text-xl font-bold"><span>ЧИСТАЯ ПРИБЫЛЬ:</span><b className="text-blue-400">{fmt(totalReportProfit)}₽</b></div>
+                    </div>
+
+                    <div className="bg-slate-900 p-4 rounded">
+                      <div className="text-slate-400 text-sm mb-2">Краткая сводка</div>
+                      <div className="text-sm">Всего доходов: {fmt(totalReportIncome)}₽</div>
+                      <div className="text-sm">Всего расходов: {fmt(totalReportExpense)}₽</div>
+                      <div className="text-sm">Прибыль: {fmt(totalReportProfit)}₽</div>
+                      <div className="mt-4">
+                        <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>alert('Функция экспорта в разработке (CSV по сводке уже доступен)')}>Экспорт отчёта</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+            </main>
+
+            {/* Modal */}
+            {showModal && (
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={closeModal}>
+                <div className="bg-slate-800 rounded p-4 w-full max-w-2xl" onClick={(e)=>e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-bold">{editingIndex!==null ? 'Редактировать' : 'Добавить'} — {modalType}</h3>
+                    <button onClick={closeModal} className="text-slate-400">✖</button>
+                  </div>
+
+                  <div className="space-y-2 max-h-[60vh] overflow-y-auto pb-2">
+                    {/* doloГo modal */}
+                    {modalType === 'dolgo' && (
+                      <>
+                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form, date:e.target.value})} placeholder="например: 06.12" /></div>
+
+                        <div>
+                          <label className="text-sm">Локация</label>
+                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.location||''} onChange={(e)=>{
+                            const loc = e.target.value;
+                            const defaultHall = locationDefaults[loc] ?? 0;
+                            setForm({...form, location: loc, hallExpense: defaultHall});
+                          }}>
+                            <option value="">Выберите локацию</option>
+                            <option value="Буденного">Буденного</option>
+                            <option value="Черкизовская">Черкизовская</option>
+                            <option value="Парк">Парк</option>
+                          </select>
+                        </div>
+
+                        <div><label className="text-sm">Педагог</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.teacher||''} onChange={(e)=>setForm({...form, teacher:e.target.value})} /></div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-sm">Ставка педагога</label>
+                            <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.rate||'50%'} onChange={(e)=>setForm({...form, rate:e.target.value})}>
+                              <option value="50%">50%</option>
+                              <option value="700">700₽</option>
+                              <option value="1000">1000₽</option>
+                              <option value="100%">100%</option>
+                              <option value="custom">Другое...</option>
+                            </select>
+                            {form.rate === 'custom' && <input className="mt-2 w-full p-2 bg-slate-700 rounded" placeholder="Введите сумму или процент (пример: 800 или 40%)" value={form.customRate||''} onChange={(e)=>setForm({...form, customRate:e.target.value})} />}
+                          </div>
+
+                          <div>
+                            <label className="text-sm">Количество людей</label>
+                            <input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.people||''} onChange={(e)=> {
+                              const people = e.target.value;
+                              const income = Number(people || 0) * 280;
+                              let rateVal = form.rate;
+                              if (rateVal === 'custom' && form.customRate) rateVal = form.customRate;
+                              setForm({...form, people, income});
+                            }} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-sm">Расход за зал (₽)</label>
+                          <input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.hallExpense||0} onChange={(e)=>setForm({...form, hallExpense: Number(e.target.value)})} />
+                        </div>
+
+                        <div>
+                          <label className="text-sm">Комментарий</label>
+                          <input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form, comment:e.target.value})} />
+                        </div>
+                        <div className="text-sm text-slate-400">Доход автоматически = Людей × 280₽ (после заполнения людей появится сумма в предварительном расчёте).</div>
+                      </>
+                    )}
+
+                    {/* individual */}
+                    {modalType === 'individual' && (
+                      <>
+                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
+                        <div><label className="text-sm">Тип услуги</label>
+                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.type||'Остальные'} onChange={(e)=>setForm({...form,type:e.target.value})}>
+                            <option>Азбука танца</option>
+                            <option>Латинский квартет</option>
+                            <option>Проам</option>
+                            <option>Постановка</option>
+                            <option>Тренировка</option>
+                            <option>Остальные</option>
+                          </select>
+                        </div>
+                        <div><label className="text-sm">Имя клиента</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.client||''} onChange={(e)=>setForm({...form,client:e.target.value})} /></div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><label className="text-sm">Сумма (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.amount||''} onChange={(e)=>setForm({...form,amount: Number(e.target.value)})} /></div>
+                          <div><label className="text-sm">Педагог (опционально)</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.teacher||''} onChange={(e)=>setForm({...form,teacher:e.target.value})} /></div>
+                        </div>
+                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
+                      </>
+                    )}
+
+                    {/* rental */}
+                    {modalType === 'rental' && (
+                      <>
+                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
+                        <div><label className="text-sm">Имя (арендатор)</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.name||''} onChange={(e)=>setForm({...form,name:e.target.value})} /></div>
+                        <div><label className="text-sm">Сумма (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.amount||''} onChange={(e)=>setForm({...form,amount: Number(e.target.value)})} /></div>
+                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
+                      </>
+                    )}
+
+                    {/* expense */}
+                    {modalType === 'expense' && (
+                      <>
+                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
+                        <div><label className="text-sm">Тип расхода</label>
+                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.type||''} onChange={(e)=>setForm({...form,type:e.target.value})}>
+                            <option>Аренда зала</option>
+                            <option>Постоянные расходы</option>
+                            <option>Увлечения</option>
+                            <option>Прочее</option>
+                          </select>
+                        </div>
+                        <div><label className="text-sm">Что</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.what||''} onChange={(e)=>setForm({...form,what:e.target.value})} /></div>
+                        <div><label className="text-sm">Сумма (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.amount||''} onChange={(e)=>setForm({...form,amount: Number(e.target.value)})} /></div>
+                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
+                      </>
+                    )}
+
+                    {/* passive */}
+                    {modalType === 'passive' && (
+                      <>
+                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
+                        <div><label className="text-sm">Источник</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.source||''} onChange={(e)=>setForm({...form,source:e.target.value})} /></div>
+                        <div><label className="text-sm">Сумма в месяц (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.monthly||''} onChange={(e)=>setForm({...form,monthly: Number(e.target.value)})} /></div>
+                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
+                      </>
+                    )}
+
+                    {/* student */}
+                    {modalType === 'student' && (
+                      <>
+                        <div><label className="text-sm">Имя и фамилия</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.name||''} onChange={(e)=>setForm({...form,name:e.target.value})} /></div>
+                        <div><label className="text-sm">Телефон</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.phone||''} onChange={(e)=>setForm({...form,phone:e.target.value})} /></div>
+                        <div><label className="text-sm">Группа</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.group||''} onChange={(e)=>setForm({...form,group:e.target.value})} placeholder="Пример: Долголетие Буденного" /></div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><label className="text-sm">Абонемент</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.subscription||''} onChange={(e)=>setForm({...form,subscription:e.target.value})} /></div>
+                          <div><label className="text-sm">Действует до</label><input type="date" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.expiry||''} onChange={(e)=>setForm({...form,expiry:e.target.value})} /></div>
+                        </div>
+                        <div><label className="text-sm">Статус</label>
+                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.status||'Активный'} onChange={(e)=>setForm({...form,status:e.target.value})}>
+                            <option>Активный</option>
+                            <option>Неактивный</option>
+                            <option>Пробный</option>
+                          </select>
+                        </div>
+                        <div><label className="text-sm">Примечание</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.note||''} onChange={(e)=>setForm({...form,note:e.target.value})} /></div>
+                      </>
+                    )}
+
+                    {/* archive modal */}
+                    {modalType === 'archive' && (
+                      <>
+                        <div><label className="text-sm">Месяц</label>
+                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.month||''} onChange={(e)=>setForm({...form,month:e.target.value})}>
+                            <option>Январь</option><option>Февраль</option><option>Март</option><option>Апрель</option>
+                            <option>Май</option><option>Июнь</option><option>Июль</option><option>Август</option>
+                            <option>Сентябрь</option><option>Октябрь</option><option>Ноябрь</option><option>Декабрь</option>
+                          </select>
+                        </div>
+                        <div><label className="text-sm">Год</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.year||''} onChange={(e)=>setForm({...form,year:e.target.value})} /></div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><label className="text-sm">Долголетие (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.groupIncome||''} onChange={(e)=>setForm({...form,groupIncome: Number(e.target.value)})} /></div>
+                          <div><label className="text-sm">Индивидуальные (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.individualIncome||''} onChange={(e)=>setForm({...form,individualIncome: Number(e.target.value)})} /></div>
+                          <div><label className="text-sm">Пассивный (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.passiveIncome||''} onChange={(e)=>setForm({...form,passiveIncome: Number(e.target.value)})} /></div>
+                          <div><label className="text-sm">Расходы (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.expenses||''} onChange={(e)=>setForm({...form,expenses: Number(e.target.value)})} /></div>
+                        </div>
+                        <div><label className="text-sm">Примечание</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.note||''} onChange={(e)=>setForm({...form,note:e.target.value})} /></div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={saveModal} className="px-4 py-2 bg-blue-600 rounded">Сохранить</button>
+                    <button onClick={closeModal} className="px-4 py-2 bg-slate-700 rounded">Отмена</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
         </div>
-
-        <div class="bg-gray-800 p-3 rounded">
-            <div class="font-bold mb-2">Прогресс к 1,000,000₽</div>
-            <div>${profit}₽ / 1,000,000₽ (${(profit/1e6*100).toFixed(1)}%)</div>
-        </div>
-    `;
-}
-
-// ======================= СВОДКА ==========================
-function renderSummary() {
-    const el = document.getElementById("summaryContent");
-
-    let incD = data.dolgo.reduce((a,b)=>a+Number(b.profit),0);
-    let incI = data.indi.reduce((a,b)=>a+Number(b.sum),0);
-    let incA = data.arenda.reduce((a,b)=>a+Number(b.sum),0);
-    let incP = data.passive.reduce((a,b)=>a+Number(b.sum),0);
-    let ex = data.exp.reduce((a,b)=>a+Number(b.sum),0);
-
-    let total = incD + incI + incA + incP - ex;
-
-    el.innerHTML = `
-        <div>Долголетие: ${incD}₽</div>
-        <div>Индивидуалки: ${incI}₽</div>
-        <div>Аренда зала: ${incA}₽</div>
-        <div>Пассивный доход: ${incP}₽</div>
-        <div>Расходы: -${ex}₽</div>
-        <div class="font-bold mt-2">Чистая прибыль: ${total}₽</div>
-    `;
-}
-
-// ======================= ДОБАВЛЕНИЕ / РЕДАКТИРОВАНИЕ ======================
-function openAddForm() {
-    editing = null;
-    showModal(currentTab, null);
-}
-function editEntry(type, i) {
-    editing = {type, index:i};
-    showModal(type, data[type][i]);
-}
-function deleteEntry(type, i) {
-    if (!confirm("Удалить запись?")) return;
-    data[type].splice(i,1);
-    saveData(type, data[type]);
-    render();
-}
-
-function showModal(type, record) {
-    document.getElementById("modal").classList.remove("hidden");
-    const form = document.getElementById("modalForm");
-    const title = document.getElementById("modalTitle");
-
-    title.innerText = editing ? "Редактирование" : "Добавление";
-
-    // СЕЙЧАС ВСТАВЛЯЮ УНИВЕРСАЛЬНЫЕ ФОРМЫ
-    // Долголетие
-    if (type === "dolgo") {
-        const dateVal = record?.date || new Date().toISOString().slice(0,10);
-        form.innerHTML = `
-            <label>Дата<input id="f_date" type="date" value="${dateVal}" class="w-full bg-gray-800 p-2 rounded"></label>
-            <label>Локация<select id=\"f_loc\" class=\"w-full bg-gray-800 p-2 rounded\">
-                <option ${record?.loc==="Буденного"?"selected":""}>Буденного</option>
-                <option ${record?.loc==="Черкизовская"?"selected":""}>Черкизовская</option>
-                <option ${record?.loc==="Парк"?"selected":""}>Парк</option>
-            </select></label>
-            <label>Педагог<input id="f_teacherName" class="w-full bg-gray-800 p-2 rounded" value="${record?.teacherName||""}"></label>
-            <label>Ставка<select id="f_rate" class="w-full bg-gray-800 p-2 rounded">
-                <option ${record?.rate==="50%"?"selected":""}>50%</option>
-                <option ${record?.rate==="700"?"selected":""}>700</option>
-                <option ${record?.rate==="1000"?"selected":""}>1000</option>
-                <option ${record?.rate==="100%"?"selected":""}>100%</option>
-            </select></label>
-            <label>Количество человек<input id="f_people" class="w-full bg-gray-800 p-2 rounded" value="${record?.people||""}"></label>
-            <label>Расход зала<input id="f_hall" class="w-full bg-gray-800 p-2 rounded" value="${record?.hall||0}"></label>
-        `;
+      );
     }
 
-    // Индивидуалки
-    if (type === "indi") {
-        const dateVal = record?.date || new Date().toISOString().slice(0,10);
-        form.innerHTML = `
-            <label>Дата<input id="f_date" type="date" value="${dateVal}" class="w-full bg-gray-800 p-2 rounded"></label>
-            <label>Тип<select id="f_type" class="w-full bg-gray-800 p-2 rounded">
-                <option>Азбука танца</option>
-                <option>Латинский квартет</option>
-                <option>Проам</option>
-                <option>Постановка</option>
-                <option>Тренировка</option>
-                <option>Остальные</option>
-            </select></label>
-            <label>Клиент<input id="f_client" class="w-full bg-gray-800 p-2 rounded" value="${record?.client||""}"></label>
-            <label>Сумма<input id="f_sum" class="w-full bg-gray-800 p-2 rounded" value="${record?.sum||""}"></label>
-        `;
-    }
-
-    // Аренда
-    if (type === "arenda") {
-        const dateVal = record?.date || new Date().toISOString().slice(0,10);
-        form.innerHTML = `
-            <label>Дата<input id="f_date" type="date" value="${dateVal}" class="w-full bg-gray-800 p-2 rounded"></label>
-            <label>Имя<input id="f_name" class="w-full bg-gray-800 p-2 rounded" value="${record?.name||""}"></label>
-            <label>Сумма<input id="f_sum" class="w-full bg-gray-800 p-2 rounded" value="${record?.sum||""}"></label>
-        `;
-    }
-
-    // Расходы
-    if (type === "exp") {
-        const dateVal = record?.date || new Date().toISOString().slice(0,10);
-        form.innerHTML = `
-            <label>Дата<input id="f_date" type="date" value="${dateVal}" class="w-full bg-gray-800 p-2 rounded"></label>
-            <label>Тип<select id="f_type" class="w-full bg-gray-800 p-2 rounded">
-                <option>Аренда зала</option>
-                <option>Постоянные расходы</option>
-                <option>Увлечения</option>
-            </select></label>
-            <label>Что<input id="f_what" class="w-full bg-gray-800 p-2 rounded" value="${record?.what||""}"></label>
-            <label>Сумма<input id="f_sum" class="w-full bg-gray-800 p-2 rounded" value="${record?.sum||""}"></label>
-        `;
-    }
-
-    // Пассив
-    if (type === "passive") {
-        const dateVal = record?.date || new Date().toISOString().slice(0,10);
-        form.innerHTML = `
-            <label>Дата<input id="f_date" type="date" value="${dateVal}" class="w-full bg-gray-800 p-2 rounded"></label>
-            <label>Источник<input id="f_src" class="w-full bg-gray-800 p-2 rounded" value="${record?.src||""}"></label>
-            <label>Сумма<input id="f_sum" class="w-full bg-gray-800 p-2 rounded" value="${record?.sum||""}"></label>
-        `;
-    }
-
-    // Ученики
-    if (type === "students") {
-        form.innerHTML = `
-            <label>Имя<input id="f_name" class="w-full bg-gray-800 p-2 rounded" value="${record?.name||""}"></label>
-            <label>Телефон<input id="f_phone" class="w-full bg-gray-800 p-2 rounded" value="${record?.phone||""}"></label>
-            <label>Группа<select id="f_group" class="w-full bg-gray-800 p-2 rounded">
-                <option>Долголетие Буденного</option>
-                <option>Долголетие Черкизовская</option>
-                <option>Латинский</option>
-                <option>Проам</option>
-                <option>Внуково</option>
-            </select></label>
-            <label>Абонемент<input id="f_abon" class="w-full bg-gray-800 p-2 rounded" value="${record?.abon||""}"></label>
-            <label>До<input id="f_until" type="date" class="w-full bg-gray-800 p-2 rounded" value="${record?.until||""}"></label>
-            <label>Статус<select id="f_status" class="w-full bg-gray-800 p-2 rounded">
-                <option>Активный</option>
-                <option>Неактивный</option>
-                <option>Пробный</option>
-            </select></label>
-        `;
-    }
-
-    // По месяцам
-    if (type === "months") {
-        form.innerHTML = `
-            <label>Месяц<input id="f_m" class="w-full bg-gray-800 p-2 rounded" value="${record?.m||""}"></label>
-            <label>Год<input id="f_y" class="w-full bg-gray-800 p-2 rounded" value="${record?.y||""}"></label>
-            <label>Долголетие<input id="f_d" class="w-full bg-gray-800 p-2 rounded" value="${record?.d||""}"></label>
-            <label>Индивидуалки<input id="f_i" class="w-full bg-gray-800 p-2 rounded" value="${record?.i||""}"></label>
-            <label>Аренда<input id="f_a" class="w-full bg-gray-800 p-2 rounded" value="${record?.a||""}"></label>
-            <label>Пассив<input id="f_p" class="w-full bg-gray-800 p-2 rounded" value="${record?.p||""}"></label>
-            <label>Расходы<input id="f_e" class="w-full bg-gray-800 p-2 rounded" value="${record?.e||""}"></label>
-        `;
-    }
-}
-
-function closeModal() {
-    document.getElementById("modal").classList.add("hidden");
-}
-
-// ======================= СОХРАНЕНИЕ ======================
-function saveEntry() {
-    let type = currentTab;
-    if (editing) type = editing.type;
-
-    const f = id => document.getElementById(id)?.value;
-
-    let rec = {};
-
-    if (type === "dolgo") {
-        const income = Number(f("f_people")) * 280;
-        let teacher = 0;
-
-        const rate = f("f_rate");
-        if (rate === "50%") teacher = income * 0.5;
-        if (rate === "100%") teacher = income;
-        if (rate === "700") teacher = 700;
-        if (rate === "1000") teacher = 1000;
-
-        rec = {
-            date: f("f_date"),
-            loc: f("f_loc"),
-            teacherName: f("f_teacherName"),
-            rate: rate,
-            people: f("f_people"),
-            income: income,
-            teacher: teacher,
-            hall: Number(f("f_hall")),
-            profit: income - teacher - Number(f("f_hall"))
-        };
-    }
-
-    if (type === "indi") {
-        rec = {
-            date: f("f_date"),
-            type: f("f_type"),
-            client: f("f_client"),
-            sum: Number(f("f_sum"))
-        };
-    }
-
-    if (type === "arenda") {
-        rec = {
-            date: f("f_date"),
-            name: f("f_name"),
-            sum: Number(f("f_sum"))
-        };
-    }
-
-    if (type === "exp") {
-        rec = {
-            date: f("f_date"),
-            type: f("f_type"),
-            what: f("f_what"),
-            sum: Number(f("f_sum"))
-        };
-    }
-
-    if (type === "passive") {
-        rec = {
-            date: f("f_date"),
-            src: f("f_src"),
-            sum: Number(f("f_sum"))
-        };
-    }
-
-    if (type === "students") {
-        rec = {
-            name: f("f_name"),
-            phone: f("f_phone"),
-            group: f("f_group"),
-            abon: f("f_abon"),
-            until: f("f_until"),
-            status: f("f_status")
-        };
-    }
-
-    if (type === "months") {
-        const sum = Number(f("f_d")) + Number(f("f_i")) + Number(f("f_a")) + Number(f("f_p")) - Number(f("f_e"));
-
-        rec = {
-            m: f("f_m"),
-            y: f("f_y"),
-            d: Number(f("f_d")),
-            i: Number(f("f_i")),
-            a: Number(f("f_a")),
-            p: Number(f("f_p")),
-            e: Number(f("f_e")),
-            pr: sum
-        };
-    }
-
-    // Сохранение
-    if (editing) {
-        data[type][editing.index] = rec;
-    } else {
-        data[type].push(rec);
-    }
-
-    saveData(type, data[type]);
-    closeModal();
-    render();
-}
-
-// ======================= CSV ======================
-function exportCSV() {
-    let csv = "Категория,Доход,Расход,Прибыль\n";
-
-    csv += "Долголетие," +
-        document.getElementById("dolgoIncome").innerText + "," +
-        (Number(document.getElementById("dolgoTeacher").innerText) + Number(document.getElementById("dolgoHall").innerText)) + "," +
-        document.getElementById("dolgoProfit").innerText + "\n";
-
-    csv += "Индивидуалки," + document.getElementById("indiTotal").innerText + ",0," + document.getElementById("indiTotal").innerText + "\n";
-    csv += "Аренда," + document.getElementById("arendaTotal").innerText + ",0," + document.getElementById("arendaTotal").innerText + "\n";
-    csv += "Пассивный," + document.getElementById("passiveTotal").innerText + ",0," + document.getElementById("passiveTotal").innerText + "\n";
-    csv += "Расходы,0," + document.getElementById("expTotal").innerText + ",-" + document.getElementById("expTotal").innerText + "\n";
-
-    const blob = new Blob([csv], {type: "text/csv"});
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "Отчёт.csv";
-    a.click();
-}
-
-// ======================= ИНИЦИАЛИЗАЦИЯ ======================
-render();
-
-</script>
-
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
 </body>
 </html>
