@@ -366,8 +366,8 @@
               <nav className="mt-4 flex flex-wrap gap-2">
                 {[
                   {id:'monthlyReport', title:'Месячный отчёт'},
-                  {id:'salaries', title:'💼 Зарплаты'},
                   {id:'dolgo', title:'Московское долголетие'},
+                  {id:'salaries', title:'Зарплаты педагогов'},
                   {id:'individuals', title:'Индивидуальные уроки'},
                   {id:'rentals', title:'Аренда зала'},
                   {id:'expenses', title:'Расходы'},
@@ -388,7 +388,6 @@
 
             <main className="bg-slate-800 rounded p-4 border border-slate-700">
               
-              {/* РАЗДЕЛ ЗАРПЛАТЫ ПЕДАГОГОВ */}
               {activeTab === 'salaries' && (
                 <section>
                   <div className="flex justify-between items-center mb-4">
@@ -400,7 +399,7 @@
                     <div className="bg-yellow-900/30 border border-yellow-700 rounded p-6 text-center">
                       <div className="text-3xl mb-3">⚠️</div>
                       <div className="text-lg font-bold mb-2">Нет данных для отчёта</div>
-                      <div className="text-slate-300 mb-4">Добавьте занятия в раздел "Московское долголетие", чтобы увидеть зарплаты педагогов</div>
+                      <div className="text-slate-300 mb-4">Добавьте занятия в раздел "Московское долголетие"</div>
                       <button onClick={()=>setActiveTab('dolgo')} className="px-4 py-2 bg-blue-600 rounded">
                         Перейти к добавлению занятий
                       </button>
@@ -409,19 +408,19 @@
                     <>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <div className="bg-gradient-to-br from-blue-900 to-blue-800 p-4 rounded-lg">
-                          <div className="text-blue-200 text-xs mb-1">Педагогов работает</div>
+                          <div className="text-blue-200 text-xs mb-1">Педагогов</div>
                           <div className="text-3xl font-bold">{new Set(dolgo.map(r=>r.teacher)).size}</div>
                         </div>
                         <div className="bg-gradient-to-br from-green-900 to-green-800 p-4 rounded-lg">
-                          <div className="text-green-200 text-xs mb-1">Всего занятий</div>
+                          <div className="text-green-200 text-xs mb-1">Занятий</div>
                           <div className="text-3xl font-bold">{dolgo.length}</div>
                         </div>
                         <div className="bg-gradient-to-br from-yellow-900 to-yellow-800 p-4 rounded-lg">
-                          <div className="text-yellow-200 text-xs mb-1">Выплачено зарплат</div>
+                          <div className="text-yellow-200 text-xs mb-1">Выплачено</div>
                           <div className="text-xl font-bold">{fmt(totalDolgoTeacherExpense)}₽</div>
                         </div>
                         <div className="bg-gradient-to-br from-red-900 to-red-800 p-4 rounded-lg">
-                          <div className="text-red-200 text-xs mb-1">Расходы на залы</div>
+                          <div className="text-red-200 text-xs mb-1">На залы</div>
                           <div className="text-xl font-bold">{fmt(totalDolgoHallExpense)}₽</div>
                         </div>
                       </div>
@@ -532,4 +531,4 @@
                       <div className="mt-6 bg-blue-900/20 border border-blue-700/50 rounded p-4">
                         <h3 className="font-bold text-blue-300 mb-2">💡 Как читать отчёт:</h3>
                         <ul className="text-sm text-slate-300 space-y-1">
-                          <li>• <b>Дней</b> — количество уникальных дат занятий педаг
+                          <li>• <b>Дней</b> — количество уникальных
