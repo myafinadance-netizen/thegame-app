@@ -114,6 +114,53 @@
       const fmt = (n) => new Intl.NumberFormat('ru-RU').format(Number(n || 0));
 
       // Business logic calculations
+      // ===== ЗАРПЛАТА ПЕДАГОГОВ =====
+const salaryMap = {};
+
+dolgo.forEach(r => {
+  if (!r.teacher) return;
+
+  const income = Number(r.income || 0);
+  const salary = calcTeacherExpense(income, r.rate);
+  const hall = Number(r.hallExpense || 0);
+  const profit = income - salary - hall;
+
+  if (!salaryMap[r.teacher]) {
+    salaryMap[r.teacher] = {
+      teacher: r.teacher,
+      location: r.location,
+      days: new Set(),
+      lessons: 0,
+      income: 0,
+      salary: 0,
+      hall: 0,
+      profit: 0
+    };
+  }
+
+  salaryMap[r.teacher].days.add(r.date);
+  salaryMap[r.teacher].lessons += 1;
+  salaryMap[r.teacher].income += income;
+  salaryMap[r.teacher].salary += salary;
+  salaryMap[r.teacher].hall += hall;
+  salaryMap[r.teacher].profit += profit;
+});
+
+const salaryList = Object.values(salaryMap).map(t => ({
+  ...t,
+  days: t.days.size,
+  efficiency: t.income ? Math.round((t.profit / t.income) * 100) : 0
+}));
+
+const salaryTotals = salaryList.reduce((a,t)=>({
+  days: a.days + t.days,
+  lessons: a.lessons + t.lessons,
+  income: a.income + t.income,
+  salary: a.salary + t.salary,
+  hall: a.hall + t.hall,
+  profit: a.profit + t.profit
+}), {days:0, lessons:0, income:0, salary:0, hall:0, profit:0});
+
       // For "Долголетие" row: income = people * 280
       // teacher expense depends on rate selection:
       // '50%' => income * 0.5
@@ -373,6 +420,7 @@
                   {id:'rentals', title:'Аренда зала'},
                   {id:'expenses', title:'Расходы'},
                   {id:'passive', title:'Пассивный'},
+          { id:'salary', title:'💼 Зарплата педагогов' },
                   {id:'students', title:'База учеников'},
                   {id:'analytics', title:'Аналитика'},
                   {id:'archive', title:'По месяцам'},
@@ -732,6 +780,22 @@
                   </div>
                 </section>
               )}
+
+{activeTab === 'salary' && (
+  <section>
+    <div className="flex justify-between items-center mb-4">
+      <h2 className="text-lg font-bold">💼 Зарплата педагогов</h2>
+    </div>
+
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="text-slate-300 border-b border-slate-700">
+          <tr>
+            <th>Педагог</th>
+            <th className="text-center">Дней</th>
+            <th className="text-center">Занятий</th>
+            <th className="text-right">Доход</th>
+            <th className="text-right">Зар
 
               {activeTab === 'analytics' && (
                 <section>
