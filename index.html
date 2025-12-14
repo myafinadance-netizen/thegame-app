@@ -1,534 +1,463 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TheGame — Учёт доходов</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+      background: #0f172a; 
+      color: #fff; 
+      padding: 16px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    h2 { font-size: 18px; margin-bottom: 16px; }
+    
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .progress-bar-container { 
+      display: flex; 
+      align-items: center; 
+      gap: 12px; 
+    }
+    .progress-bar {
+      width: 200px;
+      height: 16px;
+      background: #475569;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(to right, #3b82f6, #10b981);
+      transition: width 0.3s;
+    }
+    
+    .nav { 
+      display: flex; 
+      flex-wrap: wrap; 
+      gap: 8px; 
+      margin-bottom: 20px; 
+    }
+    .nav button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      background: #1e293b;
+      color: #94a3b8;
+      transition: all 0.2s;
+    }
+    .nav button.active {
+      background: #2563eb;
+      color: #fff;
+      font-weight: bold;
+    }
+    .nav button:hover:not(.active) {
+      background: #334155;
+    }
+    
+    .main-box {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #334155;
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      padding: 16px;
+      border-radius: 10px;
+    }
+    .stat-card.blue { background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); }
+    .stat-card.green { background: linear-gradient(135deg, #065f46 0%, #047857 100%); }
+    .stat-card.yellow { background: linear-gradient(135deg, #78350f 0%, #92400e 100%); }
+    .stat-card.red { background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%); }
+    .stat-label { font-size: 11px; opacity: 0.8; margin-bottom: 6px; text-transform: uppercase; }
+    .stat-value { font-size: 28px; font-weight: bold; }
+    
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th { 
+      padding: 12px 8px; 
+      text-align: left; 
+      color: #cbd5e1; 
+      font-size: 13px;
+      border-bottom: 2px solid #334155;
+    }
+    td { 
+      padding: 12px 8px; 
+      border-bottom: 1px solid #334155;
+    }
+    tbody tr:hover { background: #334155; }
+    
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-success { background: #16a34a; color: #fff; }
+    
+    .badge {
+      display: inline-block;
+      background: #2563eb;
+      color: #fff;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    
+    .text-green { color: #4ade80; }
+    .text-yellow { color: #fbbf24; }
+    .text-red { color: #f87171; }
+    .text-blue { color: #60a5fa; }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .font-bold { font-weight: bold; }
+    
+    .progress-bar-small {
+      width: 100%;
+      height: 8px;
+      background: #334155;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+    .progress-fill-small {
+      height: 100%;
+      transition: width 0.3s;
+    }
+    .progress-fill-small.high { background: #22c55e; }
+    .progress-fill-small.medium { background: #eab308; }
+    .progress-fill-small.low { background: #ef4444; }
+    
+    .info-box {
+      background: rgba(59, 130, 246, 0.1);
+      border-left: 4px solid #3b82f6;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    
+    .warning-box {
+      background: rgba(234, 179, 8, 0.1);
+      border: 1px solid #ca8a04;
+      padding: 24px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    
+    .teacher-name { font-weight: bold; font-size: 15px; }
+    .teacher-location { color: #94a3b8; font-size: 12px; margin-top: 4px; }
+    
+    .hidden { display: none; }
+  </style>
 </head>
-<body class="bg-slate-900 text-white">
-  <div id="root"></div>
+<body>
+  <div class="container">
+    <div class="header-top">
+      <div>
+        <h1>💰 TheGame — Учёт доходов</h1>
+        <div style="font-size: 12px; color: #94a3b8;">Путь к 1М</div>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Прогресс к цели</div>
+        <div class="progress-bar-container">
+          <div class="progress-bar">
+            <div class="progress-fill" id="goalProgress" style="width: 38.5%"></div>
+          </div>
+          <div style="font-size: 14px; font-weight: bold;" id="goalPercent">39%</div>
+        </div>
+        <div style="font-size: 11px; color: #64748b;" id="goalText">385,000₽ → 1,000,000₽</div>
+      </div>
+    </div>
 
-  <script type="text/babel">
-    const { useState, useEffect } = React;
-    const tg = window.Telegram?.WebApp;
+    <nav class="nav">
+      <button class="active" onclick="showTab('monthlyReport')">Месячный отчёт</button>
+      <button onclick="showTab('dolgo')">Московское долголетие</button>
+      <button onclick="showTab('salaries')">Зарплаты педагогов</button>
+      <button onclick="showTab('individuals')">Индивидуальные</button>
+      <button onclick="showTab('rentals')">Аренда</button>
+      <button onclick="showTab('expenses')">Расходы</button>
+      <button onclick="showTab('passive')">Пассивный</button>
+      <button onclick="showTab('students')">Ученики</button>
+      <button onclick="showTab('analytics')">Аналитика</button>
+    </nav>
 
-    const Icon = ({children}) => <span className="inline-block align-middle mr-2">{children}</span>;
+    <div class="main-box">
+      <!-- ЗАРПЛАТЫ ПЕДАГОГОВ -->
+      <div id="tab-salaries" class="hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h2>💼 Зарплаты педагогов</h2>
+          <button class="btn btn-success" onclick="exportSalaries()">Экспорт CSV</button>
+        </div>
 
-    function App() {
-      const [activeTab, setActiveTab] = useState('monthlyReport');
-      const [loading, setLoading] = useState(true);
+        <div id="salaries-empty" class="warning-box">
+          <div style="font-size: 48px; margin-bottom: 12px;">⚠️</div>
+          <div style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">Нет данных для отчёта</div>
+          <div style="color: #e2e8f0; margin-bottom: 16px;">Добавьте занятия в раздел "Московское долголетие"</div>
+          <button class="btn btn-primary" onclick="showTab('dolgo')">Перейти к добавлению</button>
+        </div>
 
-      const [dolgo, setDolgo] = useState([]);
-      const [individuals, setIndividuals] = useState([]);
-      const [rentals, setRentals] = useState([]);
-      const [expenses, setExpenses] = useState([]);
-      const [passive, setPassive] = useState([]);
-      const [students, setStudents] = useState([]);
-      const [monthlyArchive, setMonthlyArchive] = useState([]);
+        <div id="salaries-content" class="hidden">
+          <div class="stats-grid">
+            <div class="stat-card blue">
+              <div class="stat-label">Педагогов работает</div>
+              <div class="stat-value" id="salaries-teachers-count">0</div>
+            </div>
+            <div class="stat-card green">
+              <div class="stat-label">Всего занятий</div>
+              <div class="stat-value" id="salaries-sessions-count">0</div>
+            </div>
+            <div class="stat-card yellow">
+              <div class="stat-label">Выплачено зарплат</div>
+              <div class="stat-value" id="salaries-total-paid">0₽</div>
+            </div>
+            <div class="stat-card red">
+              <div class="stat-label">Расходы на залы</div>
+              <div class="stat-value" id="salaries-hall-expenses">0₽</div>
+            </div>
+          </div>
 
-      const [showModal, setShowModal] = useState(false);
-      const [modalType, setModalType] = useState(null);
-      const [editingIndex, setEditingIndex] = useState(null);
-      const [form, setForm] = useState({});
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Педагог</th>
+                  <th class="text-center">Дней</th>
+                  <th class="text-center">Занятий</th>
+                  <th class="text-right">Доход</th>
+                  <th class="text-right">Зарплата</th>
+                  <th class="text-right">Зал</th>
+                  <th class="text-right">Прибыль</th>
+                  <th class="text-center">%</th>
+                </tr>
+              </thead>
+              <tbody id="salaries-table-body">
+              </tbody>
+              <tfoot style="background: #0f172a; font-weight: bold;">
+                <tr id="salaries-total-row">
+                </tr>
+              </tfoot>
+            </table>
+          </div>
 
-      const locationDefaults = {
-        "Буденного": 0,
-        "Черкизовская": 0,
-        "Парк": 0
-      };
+          <div class="info-box">
+            <h3 style="font-weight: bold; color: #93c5fd; margin-bottom: 12px;">💡 Как читать отчёт:</h3>
+            <ul style="list-style: none; font-size: 14px; color: #e2e8f0;">
+              <li style="margin-bottom: 8px;">• <b>Дней</b> — количество уникальных дат занятий</li>
+              <li style="margin-bottom: 8px;">• <b>Занятий</b> — общее количество проведённых занятий</li>
+              <li style="margin-bottom: 8px;">• <b>Доход</b> — сумма со всех занятий (людей × 280₽)</li>
+              <li style="margin-bottom: 8px;">• <b>Зарплата</b> — начислено педагогу по ставке</li>
+              <li style="margin-bottom: 8px;">• <b>Зал</b> — затраты на аренду залов</li>
+              <li style="margin-bottom: 8px;">• <b>Прибыль</b> — доход минус зарплата минус зал</li>
+              <li>• <b>%</b> — рентабельность (🟢>50% 🟡>30% 🔴<30%)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
 
-      const loadKey = async (key, fallback) => {
-        try {
-          if (tg?.CloudStorage) {
-            return await new Promise((resolve) => {
-              tg.CloudStorage.getItem(key, (err, val) => {
-                if (!err && val) {
-                  try { resolve(JSON.parse(val)); } catch { resolve(fallback); }
-                } else resolve(fallback);
-              });
-            });
-          } else {
-            const raw = localStorage.getItem(key);
-            return raw ? JSON.parse(raw) : fallback;
-          }
-        } catch {
-          return fallback;
-        }
-      };
+      <!-- МЕСЯЧНЫЙ ОТЧЁТ -->
+      <div id="tab-monthlyReport">
+        <h2>📅 Месячный отчёт</h2>
+        <p style="color: #94a3b8;">Здесь будет ваш месячный отчёт после добавления данных</p>
+      </div>
 
-      const saveKey = async (key, data) => {
-        try {
-          const val = JSON.stringify(data);
-          if (tg?.CloudStorage) tg.CloudStorage.setItem(key, val);
-          localStorage.setItem(key, val);
-        } catch (e) {
-          console.error('saveKey error', e);
-        }
-      };
+      <!-- ДОЛГОЛЕТИЕ -->
+      <div id="tab-dolgo" class="hidden">
+        <h2>🏃 Московское долголетие</h2>
+        <p style="color: #94a3b8;">Добавляйте занятия здесь, они автоматически попадут в "Зарплаты педагогов"</p>
+      </div>
 
-      useEffect(() => {
-        (async () => {
-          const [
-            _dolgo, _ind, _rent, _exp, _pass, _stud, _arch
-          ] = await Promise.all([
-            loadKey('dolgo', []),
-            loadKey('individuals', []),
-            loadKey('rentals', []),
-            loadKey('expenses', []),
-            loadKey('passive', []),
-            loadKey('students', []),
-            loadKey('monthlyArchive', [])
-          ]);
-          setDolgo(_dolgo);
-          setIndividuals(_ind);
-          setRentals(_rent);
-          setExpenses(_exp);
-          setPassive(_pass);
-          setStudents(_stud);
-          setMonthlyArchive(_arch);
-          setLoading(false);
-          try { tg?.expand && tg.expand(); } catch {}
-        })();
-      }, []);
+      <!-- ОСТАЛЬНЫЕ ВКЛАДКИ -->
+      <div id="tab-individuals" class="hidden">
+        <h2>👤 Индивидуальные уроки</h2>
+      </div>
+      <div id="tab-rentals" class="hidden">
+        <h2>🏠 Аренда зала</h2>
+      </div>
+      <div id="tab-expenses" class="hidden">
+        <h2>💸 Расходы</h2>
+      </div>
+      <div id="tab-passive" class="hidden">
+        <h2>💰 Пассивный доход</h2>
+      </div>
+      <div id="tab-students" class="hidden">
+        <h2>👥 База учеников</h2>
+      </div>
+      <div id="tab-analytics" class="hidden">
+        <h2>📊 Аналитика</h2>
+      </div>
+    </div>
+  </div>
 
-      useEffect(()=> { if(!loading) saveKey('dolgo', dolgo); }, [dolgo]);
-      useEffect(()=> { if(!loading) saveKey('individuals', individuals); }, [individuals]);
-      useEffect(()=> { if(!loading) saveKey('rentals', rentals); }, [rentals]);
-      useEffect(()=> { if(!loading) saveKey('expenses', expenses); }, [expenses]);
-      useEffect(()=> { if(!loading) saveKey('passive', passive); }, [passive]);
-      useEffect(()=> { if(!loading) saveKey('students', students); }, [students]);
-      useEffect(()=> { if(!loading) saveKey('monthlyArchive', monthlyArchive); }, [monthlyArchive]);
+  <script>
+    // Данные (в реальности будут загружаться из localStorage/CloudStorage)
+    let dolgoData = [
+      {date: '01.12', location: 'Буденного', teacher: 'Иванова Мария', rate: '50%', people: 15, income: 4200, hallExpense: 0},
+      {date: '01.12', location: 'Парк', teacher: 'Петров Сергей', rate: '700', people: 12, income: 3360, hallExpense: 0},
+      {date: '03.12', location: 'Буденного', teacher: 'Иванова Мария', rate: '50%', people: 18, income: 5040, hallExpense: 0},
+      {date: '05.12', location: 'Черкизовская', teacher: 'Сидорова Анна', rate: '1000', people: 20, income: 5600, hallExpense: 0},
+      {date: '06.12', location: 'Парк', teacher: 'Петров Сергей', rate: '700', people: 14, income: 3920, hallExpense: 0},
+    ];
 
-      const fmt = (n) => new Intl.NumberFormat('ru-RU').format(Number(n || 0));
+    function fmt(n) {
+      return new Intl.NumberFormat('ru-RU').format(Number(n || 0));
+    }
 
-      const calcTeacherExpense = (income, rate) => {
-        if (!rate) return 0;
-        if (rate === '50%') return Math.round(income * 0.5);
-        if (rate === '700') return 700;
-        if (rate === '1000') return 1000;
-        if (rate === '100%') return Math.round(income * 1.0);
-        const parsed = parseFloat(rate);
-        return Number.isFinite(parsed) ? parsed : 0;
-      };
+    function calcTeacherExpense(income, rate) {
+      if (!rate) return 0;
+      if (rate === '50%') return Math.round(income * 0.5);
+      if (rate === '700') return 700;
+      if (rate === '1000') return 1000;
+      if (rate === '100%') return Math.round(income * 1.0);
+      const parsed = parseFloat(rate);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
 
-      const totalDolgoIncome = dolgo.reduce((s,r)=> s + (Number(r.income)||0), 0);
-      const totalDolgoTeacherExpense = dolgo.reduce((s,r)=> s + calcTeacherExpense(Number(r.income)||0, r.rate), 0);
-      const totalDolgoHallExpense = dolgo.reduce((s,r)=> s + (Number(r.hallExpense)||0), 0);
-      const totalDolgoProfit = totalDolgoIncome - totalDolgoTeacherExpense - totalDolgoHallExpense;
+    function showTab(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
+      // Show selected tab
+      document.getElementById('tab-' + tabName).classList.remove('hidden');
+      
+      // Update nav buttons
+      document.querySelectorAll('.nav button').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      // If showing salaries, render data
+      if (tabName === 'salaries') {
+        renderSalaries();
+      }
+    }
 
-      const totalIndividualIncome = individuals.reduce((s,r)=> s + (Number(r.amount)||0), 0);
-      const totalRentalsIncome = rentals.reduce((s,r)=> s + (Number(r.amount)||0), 0);
-      const totalPassiveIncome = passive.reduce((s,r)=> s + (Number(r.monthly)||0), 0);
-      const totalExpenses = expenses.reduce((s,r)=> s + (Number(r.amount)||0), 0);
-
-      const monthlyReport = [
-        { category: 'Московское долголетие', income: totalDolgoIncome, expense: totalDolgoTeacherExpense + totalDolgoHallExpense, profit: totalDolgoProfit },
-        { category: 'Индивидуальные уроки', income: totalIndividualIncome, expense: 0, profit: totalIndividualIncome },
-        { category: 'Аренда зала', income: totalRentalsIncome, expense: 0, profit: totalRentalsIncome },
-        { category: 'Пассивный', income: totalPassiveIncome, expense: 0, profit: totalPassiveIncome },
-        { category: 'Расходы', income: 0, expense: totalExpenses, profit: -totalExpenses },
-      ];
-      const totalReportIncome = monthlyReport.reduce((s,r)=> s + (r.income||0), 0);
-      const totalReportExpense = monthlyReport.reduce((s,r)=> s + (r.expense||0), 0);
-      const totalReportProfit = monthlyReport.reduce((s,r)=> s + (r.profit||0), 0);
-
-      const profitMap = {};
-      dolgo.forEach(r=>{
-        const profit = (Number(r.income)||0) - calcTeacherExpense(Number(r.income)||0, r.rate) - (Number(r.hallExpense)||0);
-        const name = r.teacher || r.location || 'Без имени';
-        profitMap[name] = (profitMap[name]||0) + profit;
-      });
-      rentals.forEach(r=>{
-        const name = r.name || 'Аренда';
-        profitMap[name] = (profitMap[name]||0) + (Number(r.amount)||0);
-      });
-      individuals.forEach(r=>{
-        const teacher = r.teacher || 'Индивидуалки';
-        profitMap[teacher] = (profitMap[teacher]||0) + (Number(r.amount)||0);
-      });
-
-      const topList = Object.entries(profitMap)
-        .map(([key,val])=> ({name:key, profit: Math.round(val)}))
-        .sort((a,b)=> b.profit - a.profit)
-        .slice(0,10);
-      const topTotal = topList.reduce((s,r)=> s + r.profit, 0);
-      const topWithShare = topList.map(t=> ({...t, share: topTotal ? Math.round((t.profit / topTotal)*100) : 0}));
-
-      const totalStudents = students.length;
-      const activeStudents = students.filter(s=> s.status === 'Активный').length;
-      const avgIncomePerStudent = totalStudents ? Math.round((totalReportProfit + totalIndividualIncome + totalPassiveIncome - totalExpenses) / totalStudents) : 0;
-
-      const baseStart = 385000;
-      const currentTotal = baseStart + (totalReportProfit);
-      const goal = 1000000;
-      const progressPercent = Math.round((currentTotal / goal) * 100);
-
-      const openModal = (type, idx = null) => {
-        setModalType(type);
-        setEditingIndex(idx);
-        let data = {};
-        if (idx !== null) {
-          if (type === 'dolgo') data = {...dolgo[idx]};
-          if (type === 'individual') data = {...individuals[idx]};
-          if (type === 'rental') data = {...rentals[idx]};
-          if (type === 'expense') data = {...expenses[idx]};
-          if (type === 'passive') data = {...passive[idx]};
-          if (type === 'student') data = {...students[idx]};
-          if (type === 'archive') data = {...monthlyArchive[idx]};
-        } else {
-          data = {};
-        }
-        setForm(data);
-        setShowModal(true);
-      };
-
-      const closeModal = () => { setShowModal(false); setForm({}); setEditingIndex(null); setModalType(null); };
-
-      const saveModal = () => {
-        if (modalType === 'dolgo') {
-          const people = Number(form.people || 0);
-          const income = people * 280;
-          const row = {
-            date: form.date || '',
-            location: form.location || '',
-            teacher: form.teacher || '',
-            rate: form.rate || '50%',
-            people,
-            income,
-            hallExpense: Number(form.hallExpense || locationDefaults[form.location] || 0),
-            comment: form.comment || ''
-          };
-          if (editingIndex !== null) {
-            const copy = [...dolgo]; copy[editingIndex] = row; setDolgo(copy);
-          } else {
-            setDolgo([...dolgo, row]);
-          }
-        }
-        if (modalType === 'individual') {
-          const row = {
-            date: form.date || '',
-            type: form.type || 'Остальные',
-            client: form.client || '',
-            teacher: form.teacher || '',
-            amount: Number(form.amount || 0),
-            comment: form.comment || ''
-          };
-          if (editingIndex !== null) {
-            const copy = [...individuals]; copy[editingIndex] = row; setIndividuals(copy);
-          } else setIndividuals([...individuals, row]);
-        }
-        if (modalType === 'rental') {
-          const row = {
-            date: form.date || '',
-            name: form.name || '',
-            amount: Number(form.amount || 0),
-            comment: form.comment || ''
-          };
-          if (editingIndex !== null) { const copy=[...rentals]; copy[editingIndex]=row; setRentals(copy); }
-          else setRentals([...rentals, row]);
-        }
-        if (modalType === 'expense') {
-          const row = {
-            date: form.date || '',
-            type: form.type || '',
-            what: form.what || '',
-            amount: Number(form.amount || 0),
-            comment: form.comment || ''
-          };
-          if (editingIndex !== null) { const copy=[...expenses]; copy[editingIndex]=row; setExpenses(copy); }
-          else setExpenses([...expenses, row]);
-        }
-        if (modalType === 'passive') {
-          const row = {
-            date: form.date || '',
-            source: form.source || '',
-            monthly: Number(form.monthly || 0),
-            comment: form.comment || ''
-          };
-          if (editingIndex !== null) { const copy=[...passive]; copy[editingIndex]=row; setPassive(copy); }
-          else setPassive([...passive, row]);
-        }
-        if (modalType === 'student') {
-          const row = {
-            name: form.name || '',
-            phone: form.phone || '',
-            group: form.group || '',
-            subscription: form.subscription || '',
-            expiry: form.expiry || '',
-            status: form.status || 'Активный',
-            note: form.note || ''
-          };
-          if (editingIndex !== null) { const copy=[...students]; copy[editingIndex]=row; setStudents(copy); }
-          else setStudents([...students, row]);
-        }
-        if (modalType === 'archive') {
-          const groupIncome = Number(form.groupIncome||0);
-          const individualIncome = Number(form.individualIncome||0);
-          const passiveIncome = Number(form.passiveIncome||0);
-          const expensesVal = Number(form.expenses||0);
-          const profit = groupIncome + individualIncome + passiveIncome - expensesVal;
-          const row = {
-            month: form.month || '',
-            year: form.year || '',
-            groupIncome, individualIncome, passiveIncome,
-            expenses: expensesVal,
-            profit,
-            note: form.note || ''
-          };
-          if (editingIndex !== null) { const copy=[...monthlyArchive]; copy[editingIndex]=row; setMonthlyArchive(copy); }
-          else setMonthlyArchive([...monthlyArchive, row]);
-        }
-
-        closeModal();
-      };
-
-      const deleteItem = (type, idx) => {
-        if (!confirm('Удалить запись?')) return;
-        if (type === 'dolgo') setDolgo(dolgo.filter((_,i)=>i!==idx));
-        if (type === 'individual') setIndividuals(individuals.filter((_,i)=>i!==idx));
-        if (type === 'rental') setRentals(rentals.filter((_,i)=>i!==idx));
-        if (type === 'expense') setExpenses(expenses.filter((_,i)=>i!==idx));
-        if (type === 'passive') setPassive(passive.filter((_,i)=>i!==idx));
-        if (type === 'student') setStudents(students.filter((_,i)=>i!==idx));
-        if (type === 'archive') setMonthlyArchive(monthlyArchive.filter((_,i)=>i!==idx));
-      };
-
-      const exportCSV = () => {
-        let csv = 'Категория,Доход,Расход,Прибыль\n';
-        monthlyReport.forEach(row=>{
-          csv += `${row.category},${row.income},${row.expense},${row.profit}\n`;
-        });
-        csv += `\nИТОГО,${totalReportIncome},${totalReportExpense},${totalReportProfit}\n`;
-        const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'thegame_monthly_report.csv'; a.click();
-        URL.revokeObjectURL(url);
-      };
-
-      const exportSalariesCSV = () => {
-        const teacherStats = {};
-        dolgo.forEach(r=>{
-          const name = r.teacher || 'Без имени';
-          if (!teacherStats[name]) {
-            teacherStats[name] = { days: new Set(), sessions: 0, income: 0, salary: 0, hallExpense: 0 };
-          }
-          teacherStats[name].days.add(r.date);
-          teacherStats[name].sessions += 1;
-          teacherStats[name].income += Number(r.income||0);
-          teacherStats[name].salary += calcTeacherExpense(Number(r.income||0), r.rate);
-          teacherStats[name].hallExpense += Number(r.hallExpense||0);
-        });
-        
-        let csv = 'Педагог,Рабочих дней,Занятий,Доход,Зарплата,Расход на зал,Прибыль\n';
-        Object.entries(teacherStats).forEach(([name, data])=>{
-          const profit = data.income - data.salary - data.hallExpense;
-          csv += `${name},${data.days.size},${data.sessions},${data.income},${data.salary},${data.hallExpense},${profit}\n`;
-        });
-        
-        const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'salaries_report.csv'; a.click();
-        URL.revokeObjectURL(url);
-      };
-
-      if (loading) {
-        return <div className="min-h-screen flex items-center justify-center"><div>Загрузка...</div></div>;
+    function renderSalaries() {
+      if (dolgoData.length === 0) {
+        document.getElementById('salaries-empty').classList.remove('hidden');
+        document.getElementById('salaries-content').classList.add('hidden');
+        return;
       }
 
-      return (
-        <div className="min-h-screen p-4">
-          <div className="max-w-6xl mx-auto">
-            <header className="mb-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-2xl font-bold">💰 TheGame — Учёт доходов</h1>
-                  <div className="text-sm text-slate-400">Путь к 1М</div>
+      document.getElementById('salaries-empty').classList.add('hidden');
+      document.getElementById('salaries-content').classList.remove('hidden');
+
+      // Calculate teacher stats
+      const teacherStats = {};
+      dolgoData.forEach(r => {
+        const name = r.teacher || 'Без имени';
+        if (!teacherStats[name]) {
+          teacherStats[name] = {
+            days: new Set(),
+            sessions: 0,
+            income: 0,
+            salary: 0,
+            hallExpense: 0,
+            locations: new Set()
+          };
+        }
+        teacherStats[name].days.add(r.date);
+        teacherStats[name].sessions += 1;
+        teacherStats[name].income += Number(r.income || 0);
+        teacherStats[name].salary += calcTeacherExpense(Number(r.income || 0), r.rate);
+        teacherStats[name].hallExpense += Number(r.hallExpense || 0);
+        teacherStats[name].locations.add(r.location);
+      });
+
+      // Update summary cards
+      const totalTeachers = Object.keys(teacherStats).length;
+      const totalSessions = dolgoData.length;
+      const totalSalary = Object.values(teacherStats).reduce((s, t) => s + t.salary, 0);
+      const totalHall = Object.values(teacherStats).reduce((s, t) => s + t.hallExpense, 0);
+      
+      document.getElementById('salaries-teachers-count').textContent = totalTeachers;
+      document.getElementById('salaries-sessions-count').textContent = totalSessions;
+      document.getElementById('salaries-total-paid').textContent = fmt(totalSalary) + '₽';
+      document.getElementById('salaries-hall-expenses').textContent = fmt(totalHall) + '₽';
+
+      // Render table
+      const tbody = document.getElementById('salaries-table-body');
+      tbody.innerHTML = '';
+      
+      const sorted = Object.entries(teacherStats).sort((a, b) => b[1].income - a[1].income);
+      
+      let totalIncome = 0, totalSalarySum = 0, totalHallSum = 0, totalProfitSum = 0;
+      
+      sorted.forEach(([name, data]) => {
+        const profit = data.income - data.salary - data.hallExpense;
+        const profitPercent = data.income ? Math.round((profit / data.income) * 100) : 0;
+        const progressClass = profitPercent > 50 ? 'high' : profitPercent > 30 ? 'medium' : 'low';
+        
+        totalIncome += data.income;
+        totalSalarySum += data.salary;
+        totalHallSum += data.hallExpense;
+        totalProfitSum += profit;
+        
+        const row = `
+          <tr>
+            <td>
+              <div class="teacher-name">${name}</div>
+              <div class="teacher-location">📍 ${Array.from(data.locations).join(', ')}</div>
+            </td>
+            <td class="text-center">
+              <span class="badge">${data.days.size}</span>
+            </td>
+            <td class="text-center font-bold">${data.sessions}</td>
+            <td class="text-right text-green font-bold">${fmt(data.income)}₽</td>
+            <td class="text-right text-yellow font-bold">${fmt(data.salary)}₽</td>
+            <td class="text-right text-red">${fmt(data.hallExpense)}₽</td>
+            <td class="text-right ${profit > 0 ? 'text-blue' : 'text-red'} font-bold">${fmt(profit)}₽</td>
+            <td>
+              <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <div class="progress-bar-small">
+                  <div class="progress-fill-small ${progressClass}" style="width: ${Math.min(profitPercent, 100)}%"></div>
                 </div>
-                <div className="text-right">
-                  <div className="text-sm text-slate-400">Прогресс к цели</div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-56 bg-slate-700 h-4 rounded">
-                      <div className="h-4 rounded bg-gradient-to-r from-blue-500 to-green-400" style={{width: `${Math.min(progressPercent,100)}%`}}></div>
-                    </div>
-                    <div className="text-sm font-bold">{progressPercent}%</div>
-                  </div>
-                  <div className="text-xs text-slate-400"> {fmt(currentTotal)}₽ → {fmt(goal)}₽</div>
-                </div>
+                <span style="font-size: 12px; font-weight: bold;">${profitPercent}%</span>
               </div>
+            </td>
+          </tr>
+        `;
+        tbody.innerHTML += row;
+      });
 
-              <nav className="mt-4 flex flex-wrap gap-2">
-                {[
-                  {id:'monthlyReport', title:'Месячный отчёт'},
-                  {id:'dolgo', title:'Московское долголетие'},
-                  {id:'salaries', title:'Зарплаты педагогов'},
-                  {id:'individuals', title:'Индивидуальные уроки'},
-                  {id:'rentals', title:'Аренда зала'},
-                  {id:'expenses', title:'Расходы'},
-                  {id:'passive', title:'Пассивный'},
-                  {id:'students', title:'База учеников'},
-                  {id:'analytics', title:'Аналитика'},
-                  {id:'archive', title:'По месяцам'},
-                  {id:'summary', title:'Сводка'},
-                ].map(t=>(
-                  <button
-                    key={t.id}
-                    onClick={()=>setActiveTab(t.id)}
-                    className={`px-3 py-1 rounded ${activeTab===t.id ? 'bg-blue-600' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
-                  >{t.title}</button>
-                ))}
-              </nav>
-            </header>
+      // Total row
+      const uniqueDays = new Set(dolgoData.map(r => r.date)).size;
+      const totalPercent = totalIncome ? Math.round((totalProfitSum / totalIncome) * 100) : 0;
+      
+      document.getElementById('salaries-total-row').innerHTML = `
+        <td>ИТОГО:</td>
+        <td class="text-center text-blue">${uniqueDays}</td>
+        <td class="text-center">${totalSessions}</td>
+        <td class="text-right text-green">${fmt(totalIncome)}₽</td>
+        <td class="text-right text-yellow">${fmt(totalSalarySum)}₽</td>
+        <td class="text-right text-red">${fmt(totalHallSum)}₽</td>
+        <td class="text-right text-blue">${fmt(totalProfitSum)}₽</td>
+        <td class="text-center">${totalPercent}%</td>
+      `;
+    }
 
-            <main className="bg-slate-800 rounded p-4 border border-slate-700">
-              
-              {activeTab === 'salaries' && (
-                <section>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-bold">💼 Зарплаты педагогов</h2>
-                    <button onClick={exportSalariesCSV} className="px-3 py-2 bg-green-600 rounded text-sm">Экспорт CSV</button>
-                  </div>
+    function exportSalaries() {
+      alert('Функция экспорта в разработке');
+    }
 
-                  {dolgo.length === 0 ? (
-                    <div className="bg-yellow-900/30 border border-yellow-700 rounded p-6 text-center">
-                      <div className="text-3xl mb-3">⚠️</div>
-                      <div className="text-lg font-bold mb-2">Нет данных для отчёта</div>
-                      <div className="text-slate-300 mb-4">Добавьте занятия в раздел "Московское долголетие"</div>
-                      <button onClick={()=>setActiveTab('dolgo')} className="px-4 py-2 bg-blue-600 rounded">
-                        Перейти к добавлению занятий
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                        <div className="bg-gradient-to-br from-blue-900 to-blue-800 p-4 rounded-lg">
-                          <div className="text-blue-200 text-xs mb-1">Педагогов</div>
-                          <div className="text-3xl font-bold">{new Set(dolgo.map(r=>r.teacher)).size}</div>
-                        </div>
-                        <div className="bg-gradient-to-br from-green-900 to-green-800 p-4 rounded-lg">
-                          <div className="text-green-200 text-xs mb-1">Занятий</div>
-                          <div className="text-3xl font-bold">{dolgo.length}</div>
-                        </div>
-                        <div className="bg-gradient-to-br from-yellow-900 to-yellow-800 p-4 rounded-lg">
-                          <div className="text-yellow-200 text-xs mb-1">Выплачено</div>
-                          <div className="text-xl font-bold">{fmt(totalDolgoTeacherExpense)}₽</div>
-                        </div>
-                        <div className="bg-gradient-to-br from-red-900 to-red-800 p-4 rounded-lg">
-                          <div className="text-red-200 text-xs mb-1">На залы</div>
-                          <div className="text-xl font-bold">{fmt(totalDolgoHallExpense)}₽</div>
-                        </div>
-                      </div>
-
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-slate-700 text-slate-300">
-                              <th className="py-3 px-2 text-left">Педагог</th>
-                              <th className="py-3 px-2 text-center">Дней</th>
-                              <th className="py-3 px-2 text-center">Занятий</th>
-                              <th className="py-3 px-2 text-right">Доход</th>
-                              <th className="py-3 px-2 text-right">Зарплата</th>
-                              <th className="py-3 px-2 text-right">Зал</th>
-                              <th className="py-3 px-2 text-right">Прибыль</th>
-                              <th className="py-3 px-2 text-center">%</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(() => {
-                              const teacherStats = {};
-                              
-                              dolgo.forEach(r=>{
-                                const name = r.teacher || 'Без имени';
-                                if (!teacherStats[name]) {
-                                  teacherStats[name] = { 
-                                    days: new Set(), 
-                                    sessions: 0, 
-                                    income: 0, 
-                                    salary: 0, 
-                                    hallExpense: 0,
-                                    locations: new Set()
-                                  };
-                                }
-                                teacherStats[name].days.add(r.date);
-                                teacherStats[name].sessions += 1;
-                                teacherStats[name].income += Number(r.income||0);
-                                teacherStats[name].salary += calcTeacherExpense(Number(r.income||0), r.rate);
-                                teacherStats[name].hallExpense += Number(r.hallExpense||0);
-                                teacherStats[name].locations.add(r.location);
-                              });
-
-                              return Object.entries(teacherStats)
-                                .sort((a,b) => b[1].income - a[1].income)
-                                .map(([name, data], idx)=>{
-                                  const profit = data.income - data.salary - data.hallExpense;
-                                  const profitPercent = data.income ? Math.round((profit / data.income) * 100) : 0;
-                                  
-                                  return (
-                                    <tr key={idx} className="border-b border-slate-700/40 hover:bg-slate-700/30">
-                                      <td className="py-3 px-2">
-                                        <div className="font-bold">{name}</div>
-                                        <div className="text-xs text-slate-400">
-                                          📍 {Array.from(data.locations).join(', ')}
-                                        </div>
-                                      </td>
-                                      <td className="py-3 px-2 text-center">
-                                        <span className="bg-blue-600 px-3 py-1 rounded-full text-white font-bold text-xs">
-                                          {data.days.size}
-                                        </span>
-                                      </td>
-                                      <td className="py-3 px-2 text-center font-semibold">{data.sessions}</td>
-                                      <td className="py-3 px-2 text-right text-green-400 font-bold">{fmt(data.income)}₽</td>
-                                      <td className="py-3 px-2 text-right text-yellow-400 font-bold">{fmt(data.salary)}₽</td>
-                                      <td className="py-3 px-2 text-right text-red-400">{fmt(data.hallExpense)}₽</td>
-                                      <td className="py-3 px-2 text-right">
-                                        <span className={`font-bold ${profit > 0 ? 'text-blue-400' : 'text-red-400'}`}>
-                                          {fmt(profit)}₽
-                                        </span>
-                                      </td>
-                                      <td className="py-3 px-2">
-                                        <div className="flex flex-col items-center gap-1">
-                                          <div className="w-20 bg-slate-700 h-2 rounded-full overflow-hidden">
-                                            <div 
-                                              className={`h-2 ${
-                                                profitPercent > 50 ? 'bg-green-500' : 
-                                                profitPercent > 30 ? 'bg-yellow-500' : 
-                                                'bg-red-500'
-                                              }`}
-                                              style={{width: `${Math.min(profitPercent, 100)}%`}}
-                                            ></div>
-                                          </div>
-                                          <span className="text-xs font-bold">{profitPercent}%</span>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                });
-                            })()}
-                          </tbody>
-                          <tfoot className="bg-slate-900/50 font-bold">
-                            <tr>
-                              <td className="py-3 px-2">ИТОГО:</td>
-                              <td className="py-3 px-2 text-center text-blue-400">{new Set(dolgo.map(r=>r.date)).size}</td>
-                              <td className="py-3 px-2 text-center">{dolgo.length}</td>
-                              <td className="py-3 px-2 text-right text-green-400">{fmt(totalDolgoIncome)}₽</td>
-                              <td className="py-3 px-2 text-right text-yellow-400">{fmt(totalDolgoTeacherExpense)}₽</td>
-                              <td className="py-3 px-2 text-right text-red-400">{fmt(totalDolgoHallExpense)}₽</td>
-                              <td className="py-3 px-2 text-right text-blue-400">{fmt(totalDolgoProfit)}₽</td>
-                              <td className="py-3 px-2 text-center">
-                                {totalDolgoIncome ? Math.round((totalDolgoProfit/totalDolgoIncome)*100) : 0}%
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
-
-                      <div className="mt-6 bg-blue-900/20 border border-blue-700/50 rounded p-4">
-                        <h3 className="font-bold text-blue-300 mb-2">💡 Как читать отчёт:</h3>
-                        <ul className="text-sm text-slate-300 space-y-1">
-                          <li>• <b>Дней</b> — количество уникальных
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      try {
+        window.Telegram?.WebApp?.expand();
+      } catch(e) {}
+    });
+  </script>
+</body>
+</html>
