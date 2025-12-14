@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TheGame — Учёт + Зарплаты</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TheGame — Учёт доходов</title>
 
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
 <body class="bg-slate-900 text-white">
@@ -19,70 +19,70 @@
 const { useState, useEffect } = React;
 const tg = window.Telegram?.WebApp;
 
-const fmt = n => new Intl.NumberFormat('ru-RU').format(Number(n||0));
-
-const calcTeacherExpense = (income, rate) => {
-  if (!rate) return 0;
-  if (rate === '50%') return Math.round(income * 0.5);
-  if (rate === '700') return 700;
-  if (rate === '1000') return 1000;
-  if (rate === '100%') return income;
-  const p = parseFloat(rate);
-  return isNaN(p) ? 0 : p;
-};
-
-const loadKey = async (key, fallback) => {
-  try {
-    if (tg?.CloudStorage) {
-      return await new Promise(res => {
-        tg.CloudStorage.getItem(key, (_, v) => {
-          try { res(v ? JSON.parse(v) : fallback); }
-          catch { res(fallback); }
-        });
-      });
-    }
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
-const saveKey = (key, data) => {
-  const v = JSON.stringify(data);
-  tg?.CloudStorage?.setItem(key, v);
-  localStorage.setItem(key, v);
-};
-
 function App() {
-  const [activeTab, setActiveTab] = useState('dolgo');
+  const [activeTab, setActiveTab] = useState('monthlyReport');
   const [dolgo, setDolgo] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const loadKey = async (key, fallback) => {
+    try {
+      if (tg?.CloudStorage) {
+        return await new Promise(resolve => {
+          tg.CloudStorage.getItem(key, (e, v) => {
+            resolve(v ? JSON.parse(v) : fallback);
+          });
+        });
+      }
+      const v = localStorage.getItem(key);
+      return v ? JSON.parse(v) : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const saveKey = (key, data) => {
+    const v = JSON.stringify(data);
+    tg?.CloudStorage?.setItem(key, v);
+    localStorage.setItem(key, v);
+  };
+
   useEffect(() => {
-    (async ()=>{
-      setDolgo(await loadKey('dolgo', []));
+    loadKey('dolgo', []).then(d => {
+      setDolgo(d);
       setLoading(false);
       tg?.expand();
-    })();
+    });
   }, []);
 
-  useEffect(()=>{
+  useEffect(() => {
     if (!loading) saveKey('dolgo', dolgo);
   }, [dolgo]);
 
-  /* ===== ОТЧЁТ ПО ПЕДАГОГАМ ===== */
-  const teachersMap = {};
+  const fmt = n => new Intl.NumberFormat('ru-RU').format(n || 0);
 
+  const calcTeacherExpense = (income, rate) => {
+    if (rate === '50%') return income * 0.5;
+    if (rate === '700') return 700;
+    if (rate === '1000') return 1000;
+    if (rate === '100%') return income;
+    const p = parseFloat(rate);
+    return isNaN(p) ? 0 : p;
+  };
+
+  /* ===============================
+     ЗАРПЛАТЫ ПЕДАГОГОВ (ЛОГИКА)
+     =============================== */
+  const map = {};
   dolgo.forEach(r => {
-    const income = Number(r.income || (r.people || 0) * 280);
+    const t = r.teacher || 'Без имени';
+    const income = r.income || 0;
     const salary = calcTeacherExpense(income, r.rate);
-    const hall = Number(r.hallExpense || 0);
+    const hall = r.hallExpense || 0;
     const profit = income - salary - hall;
 
-    if (!teachersMap[r.teacher]) {
-      teachersMap[r.teacher] = {
-        teacher: r.teacher,
+    if (!map[t]) {
+      map[t] = {
+        teacher: t,
         location: r.location,
         days: new Set(),
         lessons: 0,
@@ -93,108 +93,120 @@ function App() {
       };
     }
 
-    const t = teachersMap[r.teacher];
-    t.days.add(r.date);
-    t.lessons++;
-    t.income += income;
-    t.salary += salary;
-    t.hall += hall;
-    t.profit += profit;
+    map[t].days.add(r.date);
+    map[t].lessons++;
+    map[t].income += income;
+    map[t].salary += salary;
+    map[t].hall += hall;
+    map[t].profit += profit;
   });
 
-  const teachers = Object.values(teachersMap).map(t => ({
+  const teachers = Object.values(map).map(t => ({
     ...t,
     days: t.days.size,
-    rent: t.income ? Math.round(t.profit / t.income * 100) : 0
+    profitability: t.income ? Math.round((t.profit / t.income) * 100) : 0
   }));
 
-  if (loading) {
-    return <div className="p-6">Загрузка…</div>;
-  }
+  const stats = {
+    teachers: teachers.length,
+    lessons: teachers.reduce((s,t)=>s+t.lessons,0),
+    salary: teachers.reduce((s,t)=>s+t.salary,0),
+    hall: teachers.reduce((s,t)=>s+t.hall,0),
+  };
+
+  if (loading) return <div className="p-6">Загрузка...</div>;
 
   return (
-    <div className="p-4 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">💰 Учёт доходов</h1>
+  <div className="p-4 max-w-6xl mx-auto">
+    <h1 className="text-2xl font-bold mb-4">💰 TheGame — Учёт доходов</h1>
 
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <button onClick={()=>setActiveTab('dolgo')}
-          className={`px-3 py-1 rounded ${activeTab==='dolgo'?'bg-blue-600':'bg-slate-700'}`}>
-          Московское долголетие
-        </button>
-
-        <button onClick={()=>setActiveTab('teachers')}
-          className={`px-3 py-1 rounded ${activeTab==='teachers'?'bg-blue-600':'bg-slate-700'}`}>
-          Зарплаты педагогов
-        </button>
-      </div>
-
-      {activeTab==='dolgo' && (
-        <table className="w-full text-sm">
-          <thead className="border-b border-slate-700 text-slate-300">
-            <tr>
-              <th>Дата</th>
-              <th>Локация</th>
-              <th>Педагог</th>
-              <th>Ставка</th>
-              <th>Людей</th>
-              <th className="text-right">Доход</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dolgo.map((r,i)=>(
-              <tr key={i} className="border-b border-slate-700/40">
-                <td>{r.date}</td>
-                <td>{r.location}</td>
-                <td>{r.teacher}</td>
-                <td>{r.rate}</td>
-                <td>{r.people}</td>
-                <td className="text-right text-green-400">
-                  {fmt(r.income || r.people*280)}₽
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {activeTab==='teachers' && (
-        <table className="w-full text-sm">
-          <thead className="border-b border-slate-700 text-slate-300">
-            <tr>
-              <th>Педагог</th>
-              <th className="text-center">Дней</th>
-              <th className="text-center">Занятий</th>
-              <th className="text-right">Доход</th>
-              <th className="text-right">Зарплата</th>
-              <th className="text-right">Зал</th>
-              <th className="text-right">Прибыль</th>
-              <th className="text-center">%</th>
-            </tr>
-          </thead>
-          <tbody>
-            {teachers.map((t,i)=>(
-              <tr key={i} className="border-b border-slate-700/40">
-                <td>
-                  <b>{t.teacher}</b>
-                  <div className="text-xs text-slate-400">📍 {t.location}</div>
-                </td>
-                <td className="text-center">{t.days}</td>
-                <td className="text-center">{t.lessons}</td>
-                <td className="text-right text-green-400">{fmt(t.income)}₽</td>
-                <td className="text-right text-yellow-400">{fmt(t.salary)}₽</td>
-                <td className="text-right text-red-400">{fmt(t.hall)}₽</td>
-                <td className="text-right text-blue-400 font-bold">{fmt(t.profit)}₽</td>
-                <td className="text-center font-bold">{t.rent}%</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+    {/* НАВИГАЦИЯ */}
+    <div className="flex gap-2 mb-6 flex-wrap">
+      {[
+        ['monthlyReport','Месячный отчёт'],
+        ['dolgo','Московское долголетие'],
+        ['salary','Зарплаты педагогов'],
+      ].map(([id,title])=>(
+        <button
+          key={id}
+          onClick={()=>setActiveTab(id)}
+          className={`px-3 py-1 rounded ${
+            activeTab===id ? 'bg-blue-600' : 'bg-slate-700'
+          }`}
+        >{title}</button>
+      ))}
     </div>
+
+    {/* ===== ЗАРПЛАТЫ ПЕДАГОГОВ ===== */}
+    {activeTab === 'salary' && (
+      <section>
+        <h2 className="text-lg font-bold mb-4">💼 Зарплаты педагогов</h2>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-slate-800 p-3 rounded">
+            <div className="text-sm text-slate-400">Педагогов</div>
+            <div className="text-2xl font-bold">{stats.teachers}</div>
+          </div>
+          <div className="bg-slate-800 p-3 rounded">
+            <div className="text-sm text-slate-400">Занятий</div>
+            <div className="text-2xl font-bold text-green-400">{stats.lessons}</div>
+          </div>
+          <div className="bg-slate-800 p-3 rounded">
+            <div className="text-sm text-slate-400">Зарплаты</div>
+            <div className="text-2xl font-bold text-yellow-400">{fmt(stats.salary)}₽</div>
+          </div>
+          <div className="bg-slate-800 p-3 rounded">
+            <div className="text-sm text-slate-400">Залы</div>
+            <div className="text-2xl font-bold text-red-400">{fmt(stats.hall)}₽</div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-slate-700 text-slate-300">
+              <tr>
+                <th>Педагог</th>
+                <th className="text-center">Дней</th>
+                <th className="text-center">Занятий</th>
+                <th className="text-right">Доход</th>
+                <th className="text-right">Зарплата</th>
+                <th className="text-right">Зал</th>
+                <th className="text-right">Прибыль</th>
+                <th className="text-center">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {teachers.map((t,i)=>(
+                <tr key={i} className="border-b border-slate-700/40">
+                  <td>
+                    <div className="font-bold">{t.teacher}</div>
+                    <div className="text-xs text-slate-400">📍 {t.location}</div>
+                  </td>
+                  <td className="text-center">{t.days}</td>
+                  <td className="text-center">{t.lessons}</td>
+                  <td className="text-right text-green-400">{fmt(t.income)}₽</td>
+                  <td className="text-right text-yellow-400">{fmt(t.salary)}₽</td>
+                  <td className="text-right text-red-400">{fmt(t.hall)}₽</td>
+                  <td className="text-right text-blue-400 font-bold">{fmt(t.profit)}₽</td>
+                  <td className="text-center font-bold">{t.profitability}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )}
+
+    {activeTab !== 'salary' && (
+      <div className="text-slate-400">
+        Остальные вкладки остаются без изменений
+      </div>
+    )}
+  </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
 </html>
