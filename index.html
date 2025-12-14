@@ -1,20 +1,15 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TheGame — Учёт + Зарплаты педагогов</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TheGame — Учёт + Зарплаты</title>
 
-  <!-- Telegram -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-  <!-- React -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
 </head>
 
 <body class="bg-slate-900 text-white">
@@ -24,29 +19,33 @@
 const { useState, useEffect } = React;
 const tg = window.Telegram?.WebApp;
 
-/* helpers */
 const fmt = n => new Intl.NumberFormat('ru-RU').format(Number(n||0));
 
 const calcTeacherExpense = (income, rate) => {
+  if (!rate) return 0;
   if (rate === '50%') return Math.round(income * 0.5);
   if (rate === '700') return 700;
   if (rate === '1000') return 1000;
   if (rate === '100%') return income;
-  const n = Number(rate);
-  return isNaN(n) ? 0 : n;
+  const p = parseFloat(rate);
+  return isNaN(p) ? 0 : p;
 };
 
 const loadKey = async (key, fallback) => {
-  if (tg?.CloudStorage) {
-    return await new Promise(res => {
-      tg.CloudStorage.getItem(key, (_, v) => {
-        try { res(v ? JSON.parse(v) : fallback); }
-        catch { res(fallback); }
+  try {
+    if (tg?.CloudStorage) {
+      return await new Promise(res => {
+        tg.CloudStorage.getItem(key, (_, v) => {
+          try { res(v ? JSON.parse(v) : fallback); }
+          catch { res(fallback); }
+        });
       });
-    });
+    }
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
   }
-  const raw = localStorage.getItem(key);
-  return raw ? JSON.parse(raw) : fallback;
 };
 
 const saveKey = (key, data) => {
@@ -56,28 +55,29 @@ const saveKey = (key, data) => {
 };
 
 function App() {
-  const [tab, setTab] = useState('dolgo');
+  const [activeTab, setActiveTab] = useState('dolgo');
   const [dolgo, setDolgo] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    (async () => {
+    (async ()=>{
       setDolgo(await loadKey('dolgo', []));
       setLoading(false);
       tg?.expand();
     })();
   }, []);
 
-  useEffect(() => {
+  useEffect(()=>{
     if (!loading) saveKey('dolgo', dolgo);
   }, [dolgo]);
 
-  /* ===== ЗАРПЛАТЫ ПЕДАГОГОВ ===== */
+  /* ===== ОТЧЁТ ПО ПЕДАГОГАМ ===== */
   const teachersMap = {};
+
   dolgo.forEach(r => {
-    const income = r.people * 280;
+    const income = Number(r.income || (r.people || 0) * 280);
     const salary = calcTeacherExpense(income, r.rate);
-    const hall = Number(r.hall||0);
+    const hall = Number(r.hallExpense || 0);
     const profit = income - salary - hall;
 
     if (!teachersMap[r.teacher]) {
@@ -92,6 +92,7 @@ function App() {
         profit: 0
       };
     }
+
     const t = teachersMap[r.teacher];
     t.days.add(r.date);
     t.lessons++;
@@ -107,24 +108,36 @@ function App() {
     rent: t.income ? Math.round(t.profit / t.income * 100) : 0
   }));
 
-  if (loading) return <div className="p-6">Загрузка…</div>;
+  if (loading) {
+    return <div className="p-6">Загрузка…</div>;
+  }
 
   return (
     <div className="p-4 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">💰 Учёт доходов</h1>
 
-      <div className="flex gap-2 mb-4">
-        <button onClick={()=>setTab('dolgo')} className={`px-3 py-1 rounded ${tab==='dolgo'?'bg-blue-600':'bg-slate-700'}`}>Московское долголетие</button>
-        <button onClick={()=>setTab('teachers')} className={`px-3 py-1 rounded ${tab==='teachers'?'bg-blue-600':'bg-slate-700'}`}>Зарплаты педагогов</button>
+      <div className="flex gap-2 mb-4 flex-wrap">
+        <button onClick={()=>setActiveTab('dolgo')}
+          className={`px-3 py-1 rounded ${activeTab==='dolgo'?'bg-blue-600':'bg-slate-700'}`}>
+          Московское долголетие
+        </button>
+
+        <button onClick={()=>setActiveTab('teachers')}
+          className={`px-3 py-1 rounded ${activeTab==='teachers'?'bg-blue-600':'bg-slate-700'}`}>
+          Зарплаты педагогов
+        </button>
       </div>
 
-      {/* ДОЛГОЛЕТИЕ */}
-      {tab==='dolgo' && (
+      {activeTab==='dolgo' && (
         <table className="w-full text-sm">
           <thead className="border-b border-slate-700 text-slate-300">
             <tr>
-              <th>Дата</th><th>Локация</th><th>Педагог</th>
-              <th>Ставка</th><th>Людей</th><th className="text-right">Доход</th>
+              <th>Дата</th>
+              <th>Локация</th>
+              <th>Педагог</th>
+              <th>Ставка</th>
+              <th>Людей</th>
+              <th className="text-right">Доход</th>
             </tr>
           </thead>
           <tbody>
@@ -135,15 +148,16 @@ function App() {
                 <td>{r.teacher}</td>
                 <td>{r.rate}</td>
                 <td>{r.people}</td>
-                <td className="text-right text-green-400">{fmt(r.people*280)}₽</td>
+                <td className="text-right text-green-400">
+                  {fmt(r.income || r.people*280)}₽
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
 
-      {/* ЗАРПЛАТЫ */}
-      {tab==='teachers' && (
+      {activeTab==='teachers' && (
         <table className="w-full text-sm">
           <thead className="border-b border-slate-700 text-slate-300">
             <tr>
@@ -183,4 +197,4 @@ function App() {
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
-</html
+</html>
