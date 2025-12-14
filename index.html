@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>TheGame — Учёт доходов</title>
-
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -21,29 +20,35 @@ const tg = window.Telegram?.WebApp;
 
 function App() {
 
-  /* =========================
-     СОСТОЯНИЯ
-  ========================== */
+  /* ================== STATES ================== */
   const [activeTab, setActiveTab] = useState('monthlyReport');
   const [dolgo, setDolgo] = useState([]);
+  const [individuals, setIndividuals] = useState([]);
+  const [rentals, setRentals] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [passive, setPassive] = useState([]);
+  const [students, setStudents] = useState([]);
 
-  /* =========================
-     ЗАГРУЗКА
-  ========================== */
+  /* ================== LOAD ================== */
   useEffect(() => {
-    const data = JSON.parse(localStorage.getItem('dolgo') || '[]');
-    setDolgo(data);
+    setDolgo(JSON.parse(localStorage.getItem('dolgo') || '[]'));
+    setIndividuals(JSON.parse(localStorage.getItem('individuals') || '[]'));
+    setRentals(JSON.parse(localStorage.getItem('rentals') || '[]'));
+    setExpenses(JSON.parse(localStorage.getItem('expenses') || '[]'));
+    setPassive(JSON.parse(localStorage.getItem('passive') || '[]'));
+    setStudents(JSON.parse(localStorage.getItem('students') || '[]'));
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('dolgo', JSON.stringify(dolgo));
-  }, [dolgo]);
+  useEffect(() => localStorage.setItem('dolgo', JSON.stringify(dolgo)), [dolgo]);
+  useEffect(() => localStorage.setItem('individuals', JSON.stringify(individuals)), [individuals]);
+  useEffect(() => localStorage.setItem('rentals', JSON.stringify(rentals)), [rentals]);
+  useEffect(() => localStorage.setItem('expenses', JSON.stringify(expenses)), [expenses]);
+  useEffect(() => localStorage.setItem('passive', JSON.stringify(passive)), [passive]);
+  useEffect(() => localStorage.setItem('students', JSON.stringify(students)), [students]);
 
   const fmt = n => new Intl.NumberFormat('ru-RU').format(n || 0);
 
-  /* =========================
-     РАСЧЁТ ЗАРПЛАТ
-  ========================== */
+  /* ================== BUSINESS ================== */
   const calcTeacherExpense = (income, rate) => {
     if (rate === '50%') return income * 0.5;
     if (rate === '100%') return income;
@@ -51,6 +56,7 @@ function App() {
     return 0;
   };
 
+  /* ================== SALARY ================== */
   const salaryMap = {};
 
   dolgo.forEach(r => {
@@ -88,11 +94,9 @@ function App() {
     efficiency: t.income ? Math.round((t.profit / t.income) * 100) : 0
   }));
 
-  /* =========================
-     UI
-  ========================== */
+  /* ================== UI ================== */
   return (
-    <div className="p-4 max-w-6xl mx-auto">
+    <div className="min-h-screen p-4 max-w-6xl mx-auto">
 
       <h1 className="text-2xl font-bold mb-4">💰 TheGame — Учёт доходов</h1>
 
@@ -100,7 +104,12 @@ function App() {
         {[
           {id:'monthlyReport', title:'Месячный отчёт'},
           {id:'dolgo', title:'Московское долголетие'},
-          {id:'salary', title:'💼 Зарплата педагогов'}
+          {id:'individuals', title:'Индивидуальные'},
+          {id:'rentals', title:'Аренда'},
+          {id:'expenses', title:'Расходы'},
+          {id:'passive', title:'Пассивный'},
+          {id:'students', title:'Ученики'},
+          {id:'salary', title:'💼 Зарплата педагогов'},
         ].map(t=>(
           <button key={t.id}
             onClick={()=>setActiveTab(t.id)}
@@ -113,7 +122,6 @@ function App() {
       {activeTab === 'salary' && (
         <section>
           <h2 className="text-lg font-bold mb-4">💼 Зарплата педагогов</h2>
-
           <table className="w-full text-sm">
             <thead className="text-slate-300 border-b border-slate-700">
               <tr>
@@ -130,10 +138,7 @@ function App() {
             <tbody>
               {salaryList.map((t,i)=>(
                 <tr key={i} className="border-b border-slate-700/40">
-                  <td>
-                    <b>{t.teacher}</b>
-                    <div className="text-xs text-slate-400">📍 {t.location}</div>
-                  </td>
+                  <td><b>{t.teacher}</b><div className="text-xs text-slate-400">📍 {t.location}</div></td>
                   <td className="text-center">{t.days}</td>
                   <td className="text-center">{t.lessons}</td>
                   <td className="text-right text-green-400">{fmt(t.income)}₽</td>
