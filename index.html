@@ -14,152 +14,6 @@
   <div id="root"></div>
 
   <script type="text/babel">
-const { useState, useEffect } = React;
-const tg = window.Telegram?.WebApp;
-
-const Icon = ({children}) => <span className="inline-block mr-2">{children}</span>;
-
-function App() {
-  const [activeTab, setActiveTab] = useState('monthlyReport');
-  const [loading, setLoading] = useState(true);
-
-  const [dolgo, setDolgo] = useState([]);
-  const [individuals, setIndividuals] = useState([]);
-  const [rentals, setRentals] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [passive, setPassive] = useState([]);
-  const [students, setStudents] = useState([]);
-  const [monthlyArchive, setMonthlyArchive] = useState([]);
-
-  const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState(null);
-  const [editingIndex, setEditingIndex] = useState(null);
-  const [form, setForm] = useState({});
-
-  const fmt = (n) => new Intl.NumberFormat('ru-RU').format(Number(n || 0));
-
-  /* ✅ ВАЖНО: функция объявлена ДО использования */
-  const calcTeacherExpense = (income, rate) => {
-    if (!rate) return 0;
-    if (rate === '50%') return Math.round(income * 0.5);
-    if (rate === '700') return 700;
-    if (rate === '1000') return 1000;
-    if (rate === '100%') return Math.round(income);
-    const parsed = parseFloat(rate);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  /* ===== ЗАРПЛАТА ПЕДАГОГОВ ===== */
-  const salaryMap = {};
-
-  dolgo.forEach(r => {
-    if (!r.teacher) return;
-
-    const income = Number(r.income || 0);
-    const salary = calcTeacherExpense(income, r.rate);
-    const hall = Number(r.hallExpense || 0);
-    const profit = income - salary - hall;
-
-    if (!salaryMap[r.teacher]) {
-      salaryMap[r.teacher] = {
-        teacher: r.teacher,
-        days: new Set(),
-        lessons: 0,
-        income: 0,
-        salary: 0,
-        hall: 0,
-        profit: 0
-      };
-    }
-
-    salaryMap[r.teacher].days.add(r.date);
-    salaryMap[r.teacher].lessons += 1;
-    salaryMap[r.teacher].income += income;
-    salaryMap[r.teacher].salary += salary;
-    salaryMap[r.teacher].hall += hall;
-    salaryMap[r.teacher].profit += profit;
-  });
-
-  const salaryList = Object.values(salaryMap).map(t => ({
-    ...t,
-    days: t.days.size,
-    efficiency: t.income ? Math.round((t.profit / t.income) * 100) : 0
-  }));
-
-  const salaryTotals = salaryList.reduce((a,t)=>({
-    days: a.days + t.days,
-    lessons: a.lessons + t.lessons,
-    income: a.income + t.income,
-    salary: a.salary + t.salary,
-    hall: a.hall + t.hall,
-    profit: a.profit + t.profit
-  }), {days:0, lessons:0, income:0, salary:0, hall:0, profit:0});
-
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Загрузка…</div>;
-  }
-
-  return (
-    <div className="min-h-screen p-4">
-      <nav className="flex gap-2 mb-4 flex-wrap">
-        <button onClick={()=>setActiveTab('monthlyReport')}>Месячный отчёт</button>
-        <button onClick={()=>setActiveTab('dolgo')}>Долголетие</button>
-        <button onClick={()=>setActiveTab('salary')}>💼 Зарплата педагогов</button>
-      </nav>
-
-      {activeTab === 'salary' && (
-        <section>
-          <h2 className="text-lg font-bold mb-4">💼 Зарплата педагогов</h2>
-
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <th>Педагог</th>
-                <th>Дней</th>
-                <th>Занятий</th>
-                <th>Доход</th>
-                <th>Зарплата</th>
-                <th>Зал</th>
-                <th>Прибыль</th>
-                <th>Эфф.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {salaryList.map((t,i)=>(
-                <tr key={i}>
-                  <td>{t.teacher}</td>
-                  <td>{t.days}</td>
-                  <td>{t.lessons}</td>
-                  <td>{fmt(t.income)}₽</td>
-                  <td>{fmt(t.salary)}₽</td>
-                  <td>{fmt(t.hall)}₽</td>
-                  <td>{fmt(t.profit)}₽</td>
-                  <td>{t.efficiency}%</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td>ИТОГО</td>
-                <td>{salaryTotals.days}</td>
-                <td>{salaryTotals.lessons}</td>
-                <td>{fmt(salaryTotals.income)}₽</td>
-                <td>{fmt(salaryTotals.salary)}₽</td>
-                <td>{fmt(salaryTotals.hall)}₽</td>
-                <td>{fmt(salaryTotals.profit)}₽</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </section>
-      )}
-    </div>
-  );
-}
-
-ReactDOM.render(<App />, document.getElementById('root'));
-</script>
-
     const { useState, useEffect } = React;
     const tg = window.Telegram?.WebApp;
 
@@ -260,53 +114,6 @@ ReactDOM.render(<App />, document.getElementById('root'));
       const fmt = (n) => new Intl.NumberFormat('ru-RU').format(Number(n || 0));
 
       // Business logic calculations
-      // ===== ЗАРПЛАТА ПЕДАГОГОВ =====
-const salaryMap = {};
-
-dolgo.forEach(r => {
-  if (!r.teacher) return;
-
-  const income = Number(r.income || 0);
-  const salary = calcTeacherExpense(income, r.rate);
-  const hall = Number(r.hallExpense || 0);
-  const profit = income - salary - hall;
-
-  if (!salaryMap[r.teacher]) {
-    salaryMap[r.teacher] = {
-      teacher: r.teacher,
-      location: r.location,
-      days: new Set(),
-      lessons: 0,
-      income: 0,
-      salary: 0,
-      hall: 0,
-      profit: 0
-    };
-  }
-
-  salaryMap[r.teacher].days.add(r.date);
-  salaryMap[r.teacher].lessons += 1;
-  salaryMap[r.teacher].income += income;
-  salaryMap[r.teacher].salary += salary;
-  salaryMap[r.teacher].hall += hall;
-  salaryMap[r.teacher].profit += profit;
-});
-
-const salaryList = Object.values(salaryMap).map(t => ({
-  ...t,
-  days: t.days.size,
-  efficiency: t.income ? Math.round((t.profit / t.income) * 100) : 0
-}));
-
-const salaryTotals = salaryList.reduce((a,t)=>({
-  days: a.days + t.days,
-  lessons: a.lessons + t.lessons,
-  income: a.income + t.income,
-  salary: a.salary + t.salary,
-  hall: a.hall + t.hall,
-  profit: a.profit + t.profit
-}), {days:0, lessons:0, income:0, salary:0, hall:0, profit:0});
-
       // For "Долголетие" row: income = people * 280
       // teacher expense depends on rate selection:
       // '50%' => income * 0.5
@@ -566,7 +373,6 @@ const salaryTotals = salaryList.reduce((a,t)=>({
                   {id:'rentals', title:'Аренда зала'},
                   {id:'expenses', title:'Расходы'},
                   {id:'passive', title:'Пассивный'},
-          { id:'salary', title:'💼 Зарплата педагогов' },
                   {id:'students', title:'База учеников'},
                   {id:'analytics', title:'Аналитика'},
                   {id:'archive', title:'По месяцам'},
@@ -926,22 +732,6 @@ const salaryTotals = salaryList.reduce((a,t)=>({
                   </div>
                 </section>
               )}
-
-{activeTab === 'salary' && (
-  <section>
-    <div className="flex justify-between items-center mb-4">
-      <h2 className="text-lg font-bold">💼 Зарплата педагогов</h2>
-    </div>
-
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="text-slate-300 border-b border-slate-700">
-          <tr>
-            <th>Педагог</th>
-            <th className="text-center">Дней</th>
-            <th className="text-center">Занятий</th>
-            <th className="text-right">Доход</th>
-            <th className="text-right">Зар
 
               {activeTab === 'analytics' && (
                 <section>
