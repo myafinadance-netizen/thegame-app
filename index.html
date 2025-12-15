@@ -1052,6 +1052,75 @@ const totalTeachersProfit = teachersList.reduce((s, t) => s + t.profit, 0);
   </section>
 )}
 
+{/* Modal */}
+            {showModal && (
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={closeModal}>
+                <div className="bg-slate-800 rounded p-4 w-full max-w-2xl" onClick={(e)=>e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-bold">{editingIndex!==null ? 'Редактировать' : 'Добавить'} — {modalType}</h3>
+                    <button onClick={closeModal} className="text-slate-400">✖</button>
+                  </div>
+
+                  <div className="space-y-2 max-h-[60vh] overflow-y-auto pb-2">
+                    {/* dolgo modal */}
+                    {modalType === 'dolgo' && (
+                      <>
+                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form, date:e.target.value})} placeholder="например: 06.12" /></div>
+
+                        <div>
+                          <label className="text-sm">Локация</label>
+                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.location||''} onChange={(e)=>{
+                            const loc = e.target.value;
+                            const defaultHall = locationDefaults[loc] ?? 0;
+                            setForm({...form, location: loc, hallExpense: defaultHall});
+                          }}>
+                            <option value="">Выберите локацию</option>
+                            <option value="Буденного">Буденного</option>
+                            <option value="Черкизовская">Черкизовская</option>
+                            <option value="Парк">Парк</option>
+                          </select>
+                        </div>
+
+                        <div><label className="text-sm">Педагог</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.teacher||''} onChange={(e)=>setForm({...form, teacher:e.target.value})} /></div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-sm">Ставка педагога</label>
+                            <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.rate||'50%'} onChange={(e)=>setForm({...form, rate:e.target.value})}>
+                              <option value="50%">50%</option>
+                              <option value="700">700₽</option>
+                              <option value="1000">1000₽</option>
+                              <option value="100%">100%</option>
+                              <option value="custom">Другое...</option>
+                            </select>
+                            {form.rate === 'custom' && <input className="mt-2 w-full p-2 bg-slate-700 rounded" placeholder="Введите сумму или процент (пример: 800 или 40%)" value={form.customRate||''} onChange={(e)=>setForm({...form, customRate:e.target.value})} />}
+                          </div>
+
+                          <div>
+                            <label className="text-sm">Количество людей</label>
+                            <input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.people||''} onChange={(e)=> {
+                              const people = e.target.value;
+                              const income = Number(people || 0) * 280;
+                              let rateVal = form.rate;
+                              if (rateVal === 'custom' && form.customRate) rateVal = form.customRate;
+                              setForm({...form, people, income});
+                            }} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-sm">Расход за зал (₽)</label>
+                          <input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.hallExpense||0} onChange={(e)=>setForm({...form, hallExpense: Number(e.target.value)})} />
+                        </div>
+
+                        <div>
+                          <label className="text-sm">Комментарий</label>
+                          <input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form, comment:e.target.value})} />
+                        </div>
+                        <div className="text-sm text-slate-400">Доход автоматически = Людей × 280₽ (после заполнения людей появится сумма в предварительном расчёте).</div>
+                      </>
+                    )}
+
                     {/* individual */}
                     {modalType === 'individual' && (
                       <>
