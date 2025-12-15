@@ -79,7 +79,7 @@
       useEffect(() => {
         (async () => {
           const [
-            _dolgo, _ind, _rent, _exp, _pass, _stud, _arch
+            _dolgo, _ind, _rent, _exp, _pass, _stud, _arch, _teachSal
           ] = await Promise.all([
             loadKey('dolgo', []),
             loadKey('individuals', []),
@@ -87,7 +87,8 @@
             loadKey('expenses', []),
             loadKey('passive', []),
             loadKey('students', []),
-            loadKey('monthlyArchive', [])
+            loadKey('monthlyArchive', []),
+            loadKey('teachersSalary', [])
           ]);
           setDolgo(_dolgo);
           setIndividuals(_ind);
@@ -96,6 +97,7 @@
           setPassive(_pass);
           setStudents(_stud);
           setMonthlyArchive(_arch);
+          setTeachersSalary(_teachSal);
           setLoading(false);
           try { tg?.expand && tg.expand(); } catch {}
         })();
@@ -109,6 +111,7 @@
       useEffect(()=> { if(!loading) saveKey('passive', passive); }, [passive]);
       useEffect(()=> { if(!loading) saveKey('students', students); }, [students]);
       useEffect(()=> { if(!loading) saveKey('monthlyArchive', monthlyArchive); }, [monthlyArchive]);
+      useEffect(()=> { if(!loading) saveKey('teachersSalary', teachersSalary); }, [teachersSalary]);
 
       // Helpers: format
       const fmt = (n) => new Intl.NumberFormat('ru-RU').format(Number(n || 0));
@@ -179,6 +182,46 @@
         .slice(0,10);
       const topTotal = topList.reduce((s,r)=> s + r.profit, 0);
       const topWithShare = topList.map(t=> ({...t, share: topTotal ? Math.round((t.profit / topTotal)*100) : 0}));
+      // Расчёт зарплат педагогов из реальных данных
+const teachersStats = {};
+dolgo.forEach(r => {
+  const teacher = r.teacher || 'Без имени';
+  const income = Number(r.income || 0);
+  const teacherExpense = calcTeacherExpense(income, r.rate);
+  const hallExpense = Number(r.hallExpense || 0);
+  const profit = income - teacherExpense - hallExpense;
+  
+  if (!teachersStats[teacher]) {
+    teachersStats[teacher] = {
+      name: teacher,
+      location: r.location || '',
+      days: new Set(),
+      sessions: 0,
+      income: 0,
+      salary: 0,
+      hallExpense: 0,
+      profit: 0
+    };
+  }
+  
+  teachersStats[teacher].days.add(r.date);
+  teachersStats[teacher].sessions++;
+  teachersStats[teacher].income += income;
+  teachersStats[teacher].salary += teacherExpense;
+  teachersStats[teacher].hallExpense += hallExpense;
+  teachersStats[teacher].profit += profit;
+});
+
+const teachersList = Object.values(teachersStats).map(t => ({
+  ...t,
+  days: t.days.size,
+  percentage: t.income ? Math.round((t.profit / t.income) * 100) : 0
+}));
+
+const totalTeachersIncome = teachersList.reduce((s, t) => s + t.income, 0);
+const totalTeachersSalary = teachersList.reduce((s, t) => s + t.salary, 0);
+const totalTeachersHall = teachersList.reduce((s, t) => s + t.hallExpense, 0);
+const totalTeachersProfit = teachersList.reduce((s, t) => s + t.profit, 0);
 
       // Students stats
       const totalStudents = students.length;
