@@ -880,6 +880,7 @@
                   </div>
                 </section>
               )}
+
 {activeTab === 'teachersSalary' && (() => {
   const [salaryRows, setSalaryRows] = React.useState([
     { teacher: 'Иванова Мария', location: 'Буденного', days: 3, lessons: 3, income: 13720, salary: 6860, hall: 0 },
@@ -889,7 +890,9 @@
 
   const updateRow = (i, key, value) => {
     const copy = [...salaryRows];
-    copy[i][key] = key === 'teacher'  key === 'location' ? value : Number(value  0);
+    copy[i][key] = (key === 'teacher' || key === 'location')
+      ? value
+      : Number(value || 0);
     setSalaryRows(copy);
   };
 
@@ -897,8 +900,9 @@
     let csv = 'Педагог;Локация;Дней;Занятий;Доход;Зарплата;Зал;Прибыль\n';
     salaryRows.forEach(r => {
       const profit = r.income - r.salary - r.hall;
-      csv += ${r.teacher};${r.location};${r.days};${r.lessons};${r.income};${r.salary};${r.hall};${profit}\n;
+      csv += `${r.teacher};${r.location};${r.days};${r.lessons};${r.income};${r.salary};${r.hall};${profit}\n`;
     });
+
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -950,36 +954,9 @@
           </tbody>
         </table>
       </div>
-
-      <div className="mt-3 text-sm text-slate-400">
-        ✔️ Данные редактируются • ✔️ Скачиваются • ✔️ Не влияют на остальной код
-      </div>
     </section>
   );
 })()}
-                    {/* individual */}
-                    {modalType === 'individual' && (
-                      <>
-                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
-                        <div><label className="text-sm">Тип услуги</label>
-                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.type||'Остальные'} onChange={(e)=>setForm({...form,type:e.target.value})}>
-                            <option>Азбука танца</option>
-                            <option>Латинский квартет</option>
-                            <option>Проам</option>
-                            <option>Постановка</option>
-                            <option>Тренировка</option>
-                            <option>Остальные</option>
-                          </select>
-                        </div>
-                        <div><label className="text-sm">Имя клиента</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.client||''} onChange={(e)=>setForm({...form,client:e.target.value})} /></div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div><label className="text-sm">Сумма (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.amount||''} onChange={(e)=>setForm({...form,amount: Number(e.target.value)})} /></div>
-                          <div><label className="text-sm">Педагог (опционально)</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.teacher||''} onChange={(e)=>setForm({...form,teacher:e.target.value})} /></div>
-                        </div>
-                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
-                      </>
-                    )}
-
                     {/* rental */}
                     {modalType === 'rental' && (
                       <>
