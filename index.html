@@ -1,203 +1,52 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<title>TheGame Финансы</title>
-
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
-
-<style>
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #0b1220;
-  color: #fff;
-}
-.header {
-  padding: 18px;
-  font-size: 22px;
-  font-weight: 600;
-}
-.card {
-  background: #121a2e;
-  border-radius: 14px;
-  padding: 14px;
-  margin: 10px;
-}
-button {
-  width: 100%;
-  padding: 14px;
-  border-radius: 12px;
-  border: none;
-  background: #2563eb;
-  color: white;
-  font-size: 16px;
-  margin-top: 8px;
-}
-input, select {
-  width: 100%;
-  padding: 12px;
-  border-radius: 10px;
-  border: none;
-  margin-top: 6px;
-}
-.stat {
-  font-size: 26px;
-  font-weight: bold;
-}
-.label {
-  opacity: .6;
-}
-hr {
-  border: none;
-  height: 1px;
-  background: #1f2937;
-  margin: 12px 0;
-}
-</style>
-</head>
-
-<body>
-
-<div class="header">💼 TheGame · Финансы</div>
-
-<div class="card">
-  <input type="file" id="file" accept=".docx">
-  <button onclick="loadDoc()">📄 Загрузить отчет</button>
-</div>
-
-<div class="card">
-  <div class="stat" id="people">0</div>
-  <div class="label">Участников</div>
-  <hr>
-  <div class="stat" id="visits">0</div>
-  <div class="label">Посещений</div>
-</div>
-
-<div class="card">
-  <div class="stat" id="income">0 ₽</div>
-  <div class="label">Доход (280 ₽ / посещение)</div>
-</div>
-
-<div class="card">
-  <b>👨‍🏫 Педагог</b>
-  <input id="teacherName" placeholder="Имя педагога">
-  <select id="payType">
-    <option value="percent">Процент</option>
-    <option value="fixed">Фикс</option>
-  </select>
-  <input id="payValue" type="number" placeholder="Процент или сумма ₽">
-</div>
-
-<div class="card">
-  <b>🏢 Аренда зала</b>
-  <select id="rentType">
-    <option value="free">Бесплатно</option>
-    <option value="paid">Платно</option>
-  </select>
-  <input id="rentValue" type="number" placeholder="Стоимость аренды ₽">
-</div>
-
-<div class="card">
-  <button onclick="calculate()">📊 Посчитать</button>
-</div>
-
-<div class="card">
-  <div class="stat" id="teacherPay">0 ₽</div>
-  <div class="label">Выплата педагогу</div>
-  <hr>
-  <div class="stat" id="profit">0 ₽</div>
-  <div class="label">Чистая прибыль</div>
-  <hr>
-  <div class="stat" id="rentability">0 %</div>
-  <div class="label">Рентабельность</div>
-</div>
-
-<div class="card">
-  <button onclick="save()">💾 Сохранить педагога</button>
-</div>
-
-<div class="card">
-  <b>📈 Сравнение педагогов</b>
-  <div id="list"></div>
-</div>
-
-<script>
-const tg = window.Telegram.WebApp;
-tg.expand();
-
-const PRICE = 280;
-let visits = 0;
-let income = 0;
-
-async function loadDoc() {
-  const file = document.getElementById("file").files[0];
-  if (!file) return;
-
-  const buffer = await file.arrayBuffer();
-  const text = (await mammoth.extractRawText({arrayBuffer: buffer})).value;
-  const lines = text.split("\n");
-
-  visits = 0;
-  let people = 0;
-
-  lines.forEach(l => {
-    const m = l.match(/\s(\d+)\s+(\d+)$/);
-    if (m) {
-      people++;
-      visits += parseInt(m[1]);
-    }
-  });
-
-  income = visits * PRICE;
-
-  document.getElementById("people").innerText = people;
-  document.getElementById("visits").innerText = visits;
-  document.getElementById("income").innerText = income + " ₽";
-}
-
-function calculate() {
-  const type = payType.value;
-  const value = Number(payValue.value);
-  const rent = rentType.value === "paid" ? Number(rentValue.value) : 0;
-
-  let teacherPay = type === "percent"
-    ? income * value / 100
-    : value;
-
-  const profit = income - teacherPay - rent;
-  const rentability = income ? Math.round((profit / income) * 100) : 0;
-
-  teacherPay = Math.round(teacherPay);
-
-  document.getElementById("teacherPay").innerText = teacherPay + " ₽";
-  document.getElementById("profit").innerText = profit + " ₽";
-  document.getElementById("rentability").innerText = rentability + " %";
-}
-
-function save() {
-  const data = JSON.parse(localStorage.getItem("teachers") || "[]");
-
-  data.push({
-    name: teacherName.value,
-    profit: profit.innerText,
-    rentability: rentability.innerText
-  });
-
-  localStorage.setItem("teachers", JSON.stringify(data));
-  render();
-}
-
 function render() {
-  const list = JSON.parse(localStorage.getItem("teachers") || "[]");
-  document.getElementById("list").innerHTML = list
-    .map(t => `• ${t.name}: ${t.profit} (${t.rentability})`)
-    .join("<br>");
+  const data = periods[currentPeriod] || {};
+
+  let html = `
+  <table>
+    <tr>
+      <th>Период</th>
+      <th>Группа</th>
+      <th>Педагог</th>
+      <th>Людей</th>
+      <th>Посещений</th>
+      <th>Грант</th>
+      <th>Педагогу</th>
+      <th>Аренда</th>
+      <th>Прибыль</th>
+      <th>%</th>
+    </tr>`;
+
+  Object.values(data).forEach(g => {
+    let teacherPay = 0;
+    let rent = g.teacher?.rent || 0;
+
+    if (g.teacher) {
+      teacherPay =
+        g.teacher.type === "percent"
+          ? g.income * g.teacher.value / 100
+          : g.teacher.value;
+    }
+
+    const profit = g.income - teacherPay - rent;
+    const rentability = g.income
+      ? Math.round(profit / g.income * 100)
+      : 0;
+
+    html += `
+    <tr>
+      <td>${currentPeriod}</td>
+      <td>${g.groupCode}</td>
+      <td>${g.teacher?.name || "-"}</td>
+      <td>${g.people}</td>
+      <td>${g.visits}</td>
+      <td>${g.income} ₽</td>
+      <td>${Math.round(teacherPay)} ₽</td>
+      <td>${rent} ₽</td>
+      <td class="${profit >= 0 ? "green" : "red"}">${profit} ₽</td>
+      <td>${rentability}%</td>
+    </tr>`;
+  });
+
+  html += "</table>";
+  document.getElementById("report").innerHTML = html;
 }
-
-render();
-</script>
-
-</body>
-</html>
