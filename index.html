@@ -1,364 +1,203 @@
-import React, { useState } from 'react';
-import { Upload, Users, DollarSign, FileText, Trash2, Plus, Download } from 'lucide-react';
-import * as mammoth from 'mammoth';
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>TheGame Финансы</title>
 
-export default function TeacherSalaryApp() {
-  const [teachers, setTeachers] = useState([]);
-  const [sessions, setSessions] = useState([]);
-  const [loading, setLoading] = useState(false);
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setLoading(true);
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const result = await mammoth.extractRawText({ arrayBuffer });
-      const text = result.value;
-      
-      parseDocxReport(text);
-    } catch (error) {
-      alert('Ошибка при чтении файла: ' + error.message);
-    }
-    setLoading(false);
-    e.target.value = '';
-  };
-
-  const parseDocxReport = (text) => {
-    // Парсинг данных из отчета
-    const lines = text.split('\n').filter(line => line.trim());
-    
-    const newSessions = [];
-    let currentDate = '';
-    let currentTeacher = '';
-    
-    lines.forEach(line => {
-      // Поиск даты (например, "15.01.2025")
-      const dateMatch = line.match(/(\d{2}\.\d{2}\.\d{4})/);
-      if (dateMatch) {
-        currentDate = dateMatch[1];
-      }
-      
-      // Поиск имени педагога и количества участников
-      // Примерный формат: "Иванов И.И. - 15 участников"
-      const teacherMatch = line.match(/([А-ЯЁ][а-яё]+\s+[А-ЯЁ]\.[А-ЯЁ]\.)\s*[-–]\s*(\d+)/);
-      if (teacherMatch && currentDate) {
-        currentTeacher = teacherMatch[1];
-        const participants = parseInt(teacherMatch[2]);
-        
-        newSessions.push({
-          id: Date.now() + Math.random(),
-          date: currentDate,
-          teacher: currentTeacher,
-          participants: participants,
-          hours: 1, // По умолчанию 1 час
-          rate: 500 // Ставка за час
-        });
-      }
-    });
-
-    if (newSessions.length > 0) {
-      setSessions(prev => [...prev, ...newSessions]);
-      updateTeachers(newSessions);
-      alert(`Добавлено ${newSessions.length} занятий`);
-    } else {
-      alert('Не удалось распознать данные в файле. Попробуйте добавить вручную.');
-    }
-  };
-
-  const updateTeachers = (newSessions) => {
-    const teacherMap = {};
-    
-    [...sessions, ...newSessions].forEach(session => {
-      if (!teacherMap[session.teacher]) {
-        teacherMap[session.teacher] = {
-          name: session.teacher,
-          totalSessions: 0,
-          totalParticipants: 0,
-          totalHours: 0,
-          totalSalary: 0
-        };
-      }
-      
-      teacherMap[session.teacher].totalSessions += 1;
-      teacherMap[session.teacher].totalParticipants += session.participants;
-      teacherMap[session.teacher].totalHours += session.hours;
-      teacherMap[session.teacher].totalSalary += session.hours * session.rate;
-    });
-
-    setTeachers(Object.values(teacherMap));
-  };
-
-  const addManualSession = () => {
-    const newSession = {
-      id: Date.now(),
-      date: new Date().toLocaleDateString('ru-RU'),
-      teacher: 'Новый педагог',
-      participants: 10,
-      hours: 1,
-      rate: 500
-    };
-    setSessions(prev => [...prev, newSession]);
-  };
-
-  const updateSession = (id, field, value) => {
-    setSessions(prev => {
-      const updated = prev.map(s => 
-        s.id === id ? { ...s, [field]: field === 'participants' || field === 'hours' || field === 'rate' ? parseFloat(value) || 0 : value } : s
-      );
-      updateTeachersFromSessions(updated);
-      return updated;
-    });
-  };
-
-  const updateTeachersFromSessions = (sessionsList) => {
-    const teacherMap = {};
-    
-    sessionsList.forEach(session => {
-      if (!teacherMap[session.teacher]) {
-        teacherMap[session.teacher] = {
-          name: session.teacher,
-          totalSessions: 0,
-          totalParticipants: 0,
-          totalHours: 0,
-          totalSalary: 0
-        };
-      }
-      
-      teacherMap[session.teacher].totalSessions += 1;
-      teacherMap[session.teacher].totalParticipants += session.participants;
-      teacherMap[session.teacher].totalHours += session.hours;
-      teacherMap[session.teacher].totalSalary += session.hours * session.rate;
-    });
-
-    setTeachers(Object.values(teacherMap));
-  };
-
-  const deleteSession = (id) => {
-    setSessions(prev => {
-      const updated = prev.filter(s => s.id !== id);
-      updateTeachersFromSessions(updated);
-      return updated;
-    });
-  };
-
-  const exportReport = () => {
-    let report = 'ОТЧЕТ ПО ЗАРПЛАТЕ ПЕДАГОГОВ\n';
-    report += 'Программа "Московское долголетие"\n\n';
-    report += '='.repeat(80) + '\n\n';
-    
-    teachers.forEach(teacher => {
-      report += `Педагог: ${teacher.name}\n`;
-      report += `Проведено занятий: ${teacher.totalSessions}\n`;
-      report += `Всего участников: ${teacher.totalParticipants}\n`;
-      report += `Часов работы: ${teacher.totalHours}\n`;
-      report += `К выплате: ${teacher.totalSalary.toFixed(2)} ₽\n`;
-      report += '-'.repeat(80) + '\n\n';
-    });
-    
-    report += `ИТОГО К ВЫПЛАТЕ: ${teachers.reduce((sum, t) => sum + t.totalSalary, 0).toFixed(2)} ₽\n`;
-    
-    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `зарплаты_${new Date().toLocaleDateString('ru-RU')}.txt`;
-    a.click();
-  };
-
-  const totalSalary = teachers.reduce((sum, t) => sum + t.totalSalary, 0);
-  const activePedagogs = teachers.length;
-  const totalParticipants = teachers.reduce((sum, t) => sum + t.totalParticipants, 0);
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="bg-slate-800 rounded-2xl shadow-2xl p-8 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-4xl font-bold text-white mb-2">💼 Зарплаты педагогов</h1>
-              <p className="text-slate-300">Программа "Московское долголетие" - Детальный отчёт</p>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-slate-400">Дата формирования</div>
-              <div className="text-white font-semibold">{new Date().toLocaleDateString('ru-RU')}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <label className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl p-4 cursor-pointer transition-all flex items-center justify-center gap-2 shadow-lg">
-            <Upload size={20} />
-            <span className="font-semibold">Быстрое добавление занятия</span>
-            <input type="file" accept=".docx" onChange={handleFileUpload} className="hidden" />
-          </label>
-          
-          <button
-            onClick={addManualSession}
-            className="bg-slate-700 hover:bg-slate-600 text-white rounded-xl p-4 transition-all flex items-center justify-center gap-2 shadow-lg"
-          >
-            <Plus size={20} />
-            <span className="font-semibold">Новый педагог</span>
-          </button>
-          
-          <button
-            onClick={exportReport}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl p-4 transition-all flex items-center justify-center gap-2 shadow-lg"
-            disabled={teachers.length === 0}
-          >
-            <Download size={20} />
-            <span className="font-semibold">Экспорт</span>
-          </button>
-          
-          <button
-            onClick={() => window.print()}
-            className="bg-slate-700 hover:bg-slate-600 text-white rounded-xl p-4 transition-all flex items-center justify-center gap-2 shadow-lg"
-          >
-            <FileText size={20} />
-            <span className="font-semibold">Печать</span>
-          </button>
-        </div>
-
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="bg-blue-600 rounded-2xl p-6 shadow-xl">
-            <div className="text-blue-100 text-sm mb-2">ПЕДАГОГОВ РАБОТАЕТ</div>
-            <div className="text-5xl font-bold text-white mb-2">{activePedagogs}</div>
-            <div className="text-blue-100">Активных специалистов</div>
-          </div>
-          
-          <div className="bg-purple-600 rounded-2xl p-6 shadow-xl">
-            <div className="text-purple-100 text-sm mb-2">ВСЕГО УЧАСТНИКОВ</div>
-            <div className="text-5xl font-bold text-white mb-2">{totalParticipants}</div>
-            <div className="text-purple-100">{sessions.length} занятий проведено</div>
-          </div>
-          
-          <div className="bg-emerald-600 rounded-2xl p-6 shadow-xl">
-            <div className="text-emerald-100 text-sm mb-2">ГРАНТ ОТ ГОСУДАРСТВА</div>
-            <div className="text-5xl font-bold text-white mb-2">{totalSalary.toFixed(0)}</div>
-            <div className="text-emerald-100">₽ к выплате</div>
-          </div>
-        </div>
-
-        {/* Teachers Summary */}
-        {teachers.length > 0 && (
-          <div className="bg-slate-800 rounded-2xl shadow-xl p-6 mb-6">
-            <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-              <Users className="text-blue-400" />
-              Сводка по педагогам
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-700">
-                    <th className="text-left text-slate-400 py-3 px-4">Педагог</th>
-                    <th className="text-center text-slate-400 py-3 px-4">Занятий</th>
-                    <th className="text-center text-slate-400 py-3 px-4">Участников</th>
-                    <th className="text-center text-slate-400 py-3 px-4">Часов</th>
-                    <th className="text-right text-slate-400 py-3 px-4">К выплате</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {teachers.map((teacher, idx) => (
-                    <tr key={idx} className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors">
-                      <td className="py-3 px-4 text-white font-medium">{teacher.name}</td>
-                      <td className="py-3 px-4 text-center text-slate-300">{teacher.totalSessions}</td>
-                      <td className="py-3 px-4 text-center text-slate-300">{teacher.totalParticipants}</td>
-                      <td className="py-3 px-4 text-center text-slate-300">{teacher.totalHours}</td>
-                      <td className="py-3 px-4 text-right text-emerald-400 font-bold">{teacher.totalSalary.toFixed(2)} ₽</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Sessions List */}
-        {sessions.length > 0 && (
-          <div className="bg-slate-800 rounded-2xl shadow-xl p-6">
-            <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-              <FileText className="text-blue-400" />
-              Детальная информация по занятиям
-            </h2>
-            <div className="space-y-3">
-              {sessions.map((session) => (
-                <div key={session.id} className="bg-slate-700 rounded-xl p-4 hover:bg-slate-600 transition-colors">
-                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-center">
-                    <input
-                      type="date"
-                      value={session.date.split('.').reverse().join('-')}
-                      onChange={(e) => updateSession(session.id, 'date', new Date(e.target.value).toLocaleDateString('ru-RU'))}
-                      className="bg-slate-600 text-white px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                    <input
-                      type="text"
-                      value={session.teacher}
-                      onChange={(e) => updateSession(session.id, 'teacher', e.target.value)}
-                      className="bg-slate-600 text-white px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="ФИО педагога"
-                    />
-                    <input
-                      type="number"
-                      value={session.participants}
-                      onChange={(e) => updateSession(session.id, 'participants', e.target.value)}
-                      className="bg-slate-600 text-white px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="Участников"
-                      min="0"
-                    />
-                    <input
-                      type="number"
-                      value={session.hours}
-                      onChange={(e) => updateSession(session.id, 'hours', e.target.value)}
-                      className="bg-slate-600 text-white px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="Часов"
-                      min="0"
-                      step="0.5"
-                    />
-                    <input
-                      type="number"
-                      value={session.rate}
-                      onChange={(e) => updateSession(session.id, 'rate', e.target.value)}
-                      className="bg-slate-600 text-white px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="Ставка ₽/час"
-                      min="0"
-                    />
-                    <button
-                      onClick={() => deleteSession(session.id)}
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                  <div className="mt-2 text-right text-emerald-400 font-semibold">
-                    Оплата: {(session.hours * session.rate).toFixed(2)} ₽
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {sessions.length === 0 && (
-          <div className="bg-slate-800 rounded-2xl shadow-xl p-12 text-center">
-            <Upload className="mx-auto mb-4 text-slate-600" size={64} />
-            <h3 className="text-2xl font-bold text-white mb-2">Нет данных</h3>
-            <p className="text-slate-400 mb-6">Загрузите DOCX отчет или добавьте занятия вручную</p>
-          </div>
-        )}
-
-        {loading && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-slate-800 rounded-2xl p-8 text-center">
-              <div className="animate-spin w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-              <p className="text-white text-lg">Обработка файла...</p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+<style>
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #0b1220;
+  color: #fff;
 }
+.header {
+  padding: 18px;
+  font-size: 22px;
+  font-weight: 600;
+}
+.card {
+  background: #121a2e;
+  border-radius: 14px;
+  padding: 14px;
+  margin: 10px;
+}
+button {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background: #2563eb;
+  color: white;
+  font-size: 16px;
+  margin-top: 8px;
+}
+input, select {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  margin-top: 6px;
+}
+.stat {
+  font-size: 26px;
+  font-weight: bold;
+}
+.label {
+  opacity: .6;
+}
+hr {
+  border: none;
+  height: 1px;
+  background: #1f2937;
+  margin: 12px 0;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">💼 TheGame · Финансы</div>
+
+<div class="card">
+  <input type="file" id="file" accept=".docx">
+  <button onclick="loadDoc()">📄 Загрузить отчет</button>
+</div>
+
+<div class="card">
+  <div class="stat" id="people">0</div>
+  <div class="label">Участников</div>
+  <hr>
+  <div class="stat" id="visits">0</div>
+  <div class="label">Посещений</div>
+</div>
+
+<div class="card">
+  <div class="stat" id="income">0 ₽</div>
+  <div class="label">Доход (280 ₽ / посещение)</div>
+</div>
+
+<div class="card">
+  <b>👨‍🏫 Педагог</b>
+  <input id="teacherName" placeholder="Имя педагога">
+  <select id="payType">
+    <option value="percent">Процент</option>
+    <option value="fixed">Фикс</option>
+  </select>
+  <input id="payValue" type="number" placeholder="Процент или сумма ₽">
+</div>
+
+<div class="card">
+  <b>🏢 Аренда зала</b>
+  <select id="rentType">
+    <option value="free">Бесплатно</option>
+    <option value="paid">Платно</option>
+  </select>
+  <input id="rentValue" type="number" placeholder="Стоимость аренды ₽">
+</div>
+
+<div class="card">
+  <button onclick="calculate()">📊 Посчитать</button>
+</div>
+
+<div class="card">
+  <div class="stat" id="teacherPay">0 ₽</div>
+  <div class="label">Выплата педагогу</div>
+  <hr>
+  <div class="stat" id="profit">0 ₽</div>
+  <div class="label">Чистая прибыль</div>
+  <hr>
+  <div class="stat" id="rentability">0 %</div>
+  <div class="label">Рентабельность</div>
+</div>
+
+<div class="card">
+  <button onclick="save()">💾 Сохранить педагога</button>
+</div>
+
+<div class="card">
+  <b>📈 Сравнение педагогов</b>
+  <div id="list"></div>
+</div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.expand();
+
+const PRICE = 280;
+let visits = 0;
+let income = 0;
+
+async function loadDoc() {
+  const file = document.getElementById("file").files[0];
+  if (!file) return;
+
+  const buffer = await file.arrayBuffer();
+  const text = (await mammoth.extractRawText({arrayBuffer: buffer})).value;
+  const lines = text.split("\n");
+
+  visits = 0;
+  let people = 0;
+
+  lines.forEach(l => {
+    const m = l.match(/\s(\d+)\s+(\d+)$/);
+    if (m) {
+      people++;
+      visits += parseInt(m[1]);
+    }
+  });
+
+  income = visits * PRICE;
+
+  document.getElementById("people").innerText = people;
+  document.getElementById("visits").innerText = visits;
+  document.getElementById("income").innerText = income + " ₽";
+}
+
+function calculate() {
+  const type = payType.value;
+  const value = Number(payValue.value);
+  const rent = rentType.value === "paid" ? Number(rentValue.value) : 0;
+
+  let teacherPay = type === "percent"
+    ? income * value / 100
+    : value;
+
+  const profit = income - teacherPay - rent;
+  const rentability = income ? Math.round((profit / income) * 100) : 0;
+
+  teacherPay = Math.round(teacherPay);
+
+  document.getElementById("teacherPay").innerText = teacherPay + " ₽";
+  document.getElementById("profit").innerText = profit + " ₽";
+  document.getElementById("rentability").innerText = rentability + " %";
+}
+
+function save() {
+  const data = JSON.parse(localStorage.getItem("teachers") || "[]");
+
+  data.push({
+    name: teacherName.value,
+    profit: profit.innerText,
+    rentability: rentability.innerText
+  });
+
+  localStorage.setItem("teachers", JSON.stringify(data));
+  render();
+}
+
+function render() {
+  const list = JSON.parse(localStorage.getItem("teachers") || "[]");
+  document.getElementById("list").innerHTML = list
+    .map(t => `• ${t.name}: ${t.profit} (${t.rentability})`)
+    .join("<br>");
+}
+
+render();
+</script>
+
+</body>
+</html>
