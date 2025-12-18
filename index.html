@@ -783,6 +783,14 @@
         const result = await mammoth.extractRawText({ arrayBuffer });
         const text = result.value;
         
+        // Показываем начало текста для отладки
+        console.log('Extracted text (first 1000 chars):', text.substring(0, 1000));
+        
+        // Временно показываем превью текста
+        if (confirm('Показать извлеченный текст для проверки?')) {
+          alert('Первые 500 символов:\n\n' + text.substring(0, 500));
+        }
+        
         const parsedData = parseAttendanceReport(text);
         
         if (!parsedData) {
@@ -793,19 +801,28 @@
         showPreview(parsedData);
         
       } catch (error) {
+        console.error('Upload error:', error);
         showAlert('Ошибка чтения файла: ' + error.message, 'error');
       }
     }
     
     function parseAttendanceReport(text) {
-      // Ищем код группы
-      const groupCodeMatch = text.match(/код\s+группы[:\s]+([A-Z]-\d+)/i) || text.match(/([A-Z]-\d{8})/);
+      console.log('Parsing text:', text.substring(0, 500));
+      
+      // Ищем код группы - более гибкий поиск
+      const groupCodeMatch = text.match(/код\s+группы[:\s]+([A-Z]-\d+)/i) || 
+                            text.match(/код группы\s+([A-Z]-\d+)/i) ||
+                            text.match(/([A-Z]-\d{8})/);
+      
       if (!groupCodeMatch) {
         showAlert('Не найден код группы в отчете', 'error');
+        console.log('Group code not found');
         return null;
       }
       
       const groupCode = groupCodeMatch[1];
+      console.log('Found group code:', groupCode);
+      
       const group = groups.find(g => g.code === groupCode);
       
       if (!group) {
@@ -813,64 +830,49 @@
         return null;
       }
       
-      // Ищем даты и время
-      const lines = text.split('\n');
+      // Ищем все даты в формате ДД.ММ с временем
+      const dateTimePattern = /(\d{2})\.(\d{2})[^\d]*(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})/g;
+      const dateMatches = [...text.matchAll(dateTimePattern)];
+      
+      console.log('Found date matches:', dateMatches.length);
+      
+      if (dateMatches.length === 0) {
+        showAlert('Не найдены даты и время в отчете', 'error');
+        return null;
+      }
+      
       const sessionData = [];
+      const year = new Date().getFullYear();
       
-      // Ищем строку с датами
-      const dateLineIndex = lines.findIndex(line => /\d{2}\.\d{2}/.test(line));
-      if (dateLineIndex === -1) {
-        showAlert('Не найдены даты в отчете', 'error');
-        return null;
-      }
-      
-      const dateLine = lines[dateLineIndex];
-      const dateMatches = [...dateLine.matchAll(/(\d{2})\.(\d{2})[^\d]*(\d{2}):(\d{2})/g)];
-      
-      const dates = dateMatches.map(m => ({
-        day: m[1],
-        month: m[2],
-        hour: m[3],
-        minute: m[4]
-      }));
-      
-      if (dates.length === 0) {
-        showAlert('Не удалось извлечь даты и время', 'error');
-        return null;
-      }
-      
-      // Для каждой даты считаем плюсики
-      dates.forEach(dateInfo => {
-        const year = new Date().getFullYear();
-        const dateStr = `${dateInfo.day}.${dateInfo.month}`;
-        const timeStr = `${dateInfo.hour}:${dateInfo.minute}`;
-        const fullDate = `${year}-${dateInfo.month}-${dateInfo.day}`;
+      // Для каждой даты
+      dateMatches.forEach(match => {
+        const day = match[1];
+        const month = match[2];
+        const startHour = match[3];
+        const startMinute = match[4];
         
-        // Считаем количество "+" в столбце этой даты
-        let count = 0;
-        lines.forEach((line, idx) => {
-          if (idx > dateLineIndex && line.includes('+')) {
-            // Проверяем что это действительно столбец нужной даты
-            const parts = line.split(/\s+/);
-            const dateIndex = dateLine.split(/\s+/).findIndex(p => p.includes(dateStr));
-            if (dateIndex !== -1 && parts[dateIndex] === '+') {
-              count++;
-            }
-          }
-        });
+        const dateStr = `${day}.${month}`;
+        const timeStr = `${startHour}:${startMinute}`;
+        const fullDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
         
-        // Простой подсчет всех + после строки с датами
-        if (count === 0) {
-          const afterDates = lines.slice(dateLineIndex + 1).join('\n');
-          const columns = afterDates.split(dateStr);
-          if (columns.length > 1) {
-            count = (columns[1].split('\n')[0].match(/\+/g) || []).length;
-          }
-        }
+        console.log('Processing date:', dateStr, timeStr);
         
-        if (count > 0) {
+        // Считаем количество "+" после этой даты в тексте
+        const datePosition = text.indexOf(match[0]);
+        const afterDate = text.substring(datePosition);
+        
+        // Ищем следующую дату или конец таблицы
+        const nextDateMatch = afterDate.substring(1).search(/\d{2}\.\d{2}/);
+        const columnText = nextDateMatch > 0 ? afterDate.substring(0, nextDateMatch + 1) : afterDate.substring(0, 500);
+        
+        // Считаем все "+" в этом столбце
+        const plusCount = (columnText.match(/\+/g) || []).length;
+        
+        console.log('Found + count:', plusCount, 'for date:', dateStr);
+        
+        if (plusCount > 0) {
           // Определяем группу по расписанию
-          const date = new Date(year, parseInt(dateInfo.month) - 1, parseInt(dateInfo.day));
+          const date = new Date(year, parseInt(month) - 1, parseInt(day));
           const dayOfWeek = date.getDay();
           
           const schedItem = schedule.find(s => 
@@ -883,12 +885,19 @@
           sessionData.push({
             date: fullDate,
             time: timeStr,
-            people: count,
+            people: plusCount,
             group: finalGroup || group,
             autoDetected: !!schedItem
           });
         }
       });
+      
+      console.log('Total sessions found:', sessionData.length);
+      
+      if (sessionData.length === 0) {
+        showAlert('Не удалось найти посещаемость в отчете', 'error');
+        return null;
+      }
       
       return {
         sessions: sessionData
