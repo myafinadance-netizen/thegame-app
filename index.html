@@ -1,356 +1,1143 @@
-// bot.js
-// Telegram bot for "Московское долголетие" (АНО «АФИНА»)
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Зарплаты педагогов - Московское долголетие</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+      background: #0f172a; 
+      color: #fff; 
+      padding: 10px;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .header-left h1 { font-size: 24px; margin-bottom: 5px; }
+    .subtitle { color: #94a3b8; font-size: 13px; }
+    
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      background: #1e40af;
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: #1e3a8a; }
+    .btn.secondary { background: #334155; }
+    .btn.secondary:hover { background: #475569; }
+    .btn.success { background: #059669; }
+    .btn.success:hover { background: #047857; }
+    .btn.small { padding: 6px 10px; font-size: 12px; }
+    
+    .stats { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
+      gap: 10px; 
+      margin-bottom: 20px; 
+    }
+    .stat-card {
+      background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    .stat-card.green { background: linear-gradient(135deg, #065f46 0%, #047857 100%); }
+    .stat-card.yellow { background: linear-gradient(135deg, #78350f 0%, #92400e 100%); }
+    .stat-card.red { background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%); }
+    .stat-card.purple { background: linear-gradient(135deg, #581c87 0%, #6b21a8 100%); }
+    
+    .stat-label { 
+      font-size: 10px; 
+      text-transform: uppercase; 
+      letter-spacing: 0.5px; 
+      opacity: 0.8;
+      margin-bottom: 5px;
+    }
+    .stat-value { font-size: 24px; font-weight: bold; }
+    .stat-change { font-size: 11px; margin-top: 5px; opacity: 0.9; }
+    
+    .table-container {
+      background: #1e293b;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 15px;
+      overflow-x: auto;
+    }
+    
+    table { 
+      width: 100%; 
+      border-collapse: collapse;
+      min-width: 600px;
+    }
+    th { 
+      padding: 10px 6px; 
+      text-align: left; 
+      color: #cbd5e1; 
+      font-size: 12px;
+      border-bottom: 2px solid #334155;
+    }
+    td { 
+      padding: 12px 6px; 
+      border-bottom: 1px solid #334155;
+      font-size: 13px;
+    }
+    
+    .badge {
+      display: inline-block;
+      background: #2563eb;
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 15px;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    
+    .amount { font-weight: bold; font-size: 14px; }
+    .green { color: #4ade80; }
+    .yellow { color: #fbbf24; }
+    .red { color: #f87171; }
+    .blue { color: #60a5fa; }
+    
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.85);
+      z-index: 1000;
+      overflow-y: auto;
+      padding: 10px;
+    }
+    .modal.active { display: block; }
+    .modal-content {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      max-width: 800px;
+      width: 100%;
+      margin: 20px auto;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .modal-title { font-size: 18px; font-weight: bold; }
+    .close-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 28px;
+      cursor: pointer;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      line-height: 1;
+    }
+    
+    .form-group {
+      margin-bottom: 12px;
+    }
+    .form-group label {
+      display: block;
+      color: #cbd5e1;
+      font-size: 13px;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      background: #334155;
+      border: 1px solid #475569;
+      color: #fff;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .form-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 15px;
+      justify-content: flex-end;
+    }
+    
+    .alert {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #1e293b;
+      border-left: 4px solid #22c55e;
+      padding: 12px 16px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      z-index: 2000;
+      max-width: 90%;
+      font-size: 13px;
+    }
+    .alert.error { border-left-color: #ef4444; }
+    
+    .info-box {
+      background: rgba(59, 130, 246, 0.1);
+      border-left: 4px solid #3b82f6;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    .info-title { 
+      font-weight: bold; 
+      color: #93c5fd; 
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    
+    .preview-section {
+      background: #334155;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .preview-title {
+      color: #93c5fd;
+      font-weight: bold;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .preview-item {
+      padding: 6px 0;
+      border-bottom: 1px solid #475569;
+      font-size: 13px;
+    }
+    .preview-item:last-child { border-bottom: none; }
+    
+    .group-card {
+      background: #334155;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .group-card h3 {
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+    .group-card p {
+      color: #94a3b8;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      margin-top: 10px;
+    }
+    .calendar-day {
+      background: #334155;
+      padding: 6px;
+      border-radius: 4px;
+      text-align: center;
+      cursor: pointer;
+      min-height: 60px;
+      font-size: 11px;
+    }
+    .calendar-day:hover { background: #475569; }
+    .calendar-day.has-schedule {
+      background: rgba(59, 130, 246, 0.3);
+      border: 2px solid #3b82f6;
+    }
+    .calendar-day-number {
+      font-weight: bold;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    .calendar-class {
+      font-size: 9px;
+      background: rgba(59, 130, 246, 0.5);
+      padding: 2px;
+      border-radius: 2px;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .upload-zone {
+      border: 2px dashed #475569;
+      border-radius: 10px;
+      padding: 30px;
+      text-align: center;
+      background: rgba(59, 130, 246, 0.05);
+      cursor: pointer;
+    }
+    .upload-icon { font-size: 40px; margin-bottom: 10px; }
+    .upload-text { color: #cbd5e1; font-size: 14px; margin-bottom: 5px; }
+    .upload-hint { color: #94a3b8; font-size: 12px; }
+    
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    
+    @media (max-width: 768px) {
+      .header-left h1 { font-size: 20px; }
+      .controls { width: 100%; }
+      .btn { width: 100%; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .stat-value { font-size: 20px; }
+      table { font-size: 11px; }
+      th, td { padding: 8px 4px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1>💼 Зарплаты педагогов</h1>
+        <div class="subtitle">Московское долголетие</div>
+      </div>
+      <div class="controls">
+        <button class="btn success" onclick="showUploadModal()">📤 Загрузить DOCX</button>
+        <button class="btn" onclick="showCalendarModal()">📅 Календарь</button>
+        <button class="btn" onclick="showGroupsModal()">📋 Группы</button>
+        <button class="btn secondary" onclick="showAddExpenseModal()">💸 Расход</button>
+      </div>
+    </div>
+    
+    <div class="stats" id="statsContainer"></div>
+    
+    <div class="table-container">
+      <h2 style="margin-bottom: 15px; font-size: 16px;">📊 По педагогам</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Педагог</th>
+            <th class="text-center">Занятий</th>
+            <th class="text-center">Людей</th>
+            <th class="text-right">Грант</th>
+            <th class="text-right">Зарплата</th>
+            <th class="text-right">Аренда</th>
+            <th class="text-right">Прибыль</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+        <tfoot style="background: #0f172a; font-weight: bold;" id="tableFoot"></tfoot>
+      </table>
+    </div>
+  </div>
+  
+  <!-- Modals -->
+  <div class="modal" id="uploadModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">📤 Загрузка отчета</div>
+        <button class="close-btn" onclick="closeModal('uploadModal')">×</button>
+      </div>
+      <div id="uploadContent">
+        <div class="upload-zone" onclick="document.getElementById('docxFile').click()">
+          <div class="upload-icon">📄</div>
+          <div class="upload-text">Выберите файл DOCX</div>
+          <div class="upload-hint">Отчет посещаемости</div>
+        </div>
+        <input type="file" id="docxFile" accept=".docx" style="display: none;" onchange="handleFileUpload(event)">
+      </div>
+    </div>
+  </div>
+  
+  <div class="modal" id="calendarModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">📅 Календарь</div>
+        <button class="close-btn" onclick="closeModal('calendarModal')">×</button>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+        <button class="btn secondary small" onclick="changeMonth(-1)">←</button>
+        <div style="font-weight: bold;" id="currentMonth"></div>
+        <button class="btn secondary small" onclick="changeMonth(1)">→</button>
+      </div>
+      <div id="calendarContent"></div>
+    </div>
+  </div>
+  
+  <div class="modal" id="addToCalendarModal">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <div class="modal-title" id="calTitle">Добавить</div>
+        <button class="close-btn" onclick="closeModal('addToCalendarModal')">×</button>
+      </div>
+      <form onsubmit="saveToCalendar(event)">
+        <input type="hidden" id="calDate">
+        <div class="form-group">
+          <label>Группа</label>
+          <select id="calGroup" required></select>
+        </div>
+        <div class="form-group">
+          <label>Время</label>
+          <input type="time" id="calTime" value="09:00">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn secondary" onclick="closeModal('addToCalendarModal')">Отмена</button>
+          <button type="submit" class="btn">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <div class="modal" id="groupsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">📋 Группы</div>
+        <button class="close-btn" onclick="closeModal('groupsModal')">×</button>
+      </div>
+      <button class="btn success" onclick="showAddGroupForm()" style="margin-bottom: 15px; width: 100%;">➕ Добавить группу</button>
+      <div id="groupsList"></div>
+    </div>
+  </div>
+  
+  <div class="modal" id="groupFormModal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <div class="modal-title" id="groupFormTitle">Группа</div>
+        <button class="close-btn" onclick="closeModal('groupFormModal')">×</button>
+      </div>
+      <form onsubmit="saveGroup(event)">
+        <input type="hidden" id="editGroupId">
+        <div class="form-group">
+          <label>Код группы *</label>
+          <input type="text" id="groupCode" placeholder="G-02250378" required>
+        </div>
+        <div class="form-group">
+          <label>Название *</label>
+          <input type="text" id="groupName" placeholder="Танцы" required>
+        </div>
+        <div class="form-group">
+          <label>Педагог *</label>
+          <input type="text" id="groupTeacher" placeholder="Екатерина Иванова" required>
+        </div>
+        <div class="form-group">
+          <label>Локация *</label>
+          <select id="groupLocation" required>
+            <option value="Буденного">Буденного</option>
+            <option value="Черкизовская">Черкизовская</option>
+            <option value="Парк">Парк</option>
+            <option value="Другое">Другое</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Тип оплаты *</label>
+          <select id="groupSalaryType" onchange="toggleSalaryLabel()">
+            <option value="percent">Процент %</option>
+            <option value="fixed">Фикс ставка</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label id="groupSalaryLabel">Процент (%) *</label>
+          <input type="number" id="groupSalaryValue" min="0" step="0.01" required>
+        </div>
+        <div class="form-group">
+          <label>Аренда зала (₽)</label>
+          <input type="number" id="groupHallCost" min="0" value="0">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn secondary" onclick="closeModal('groupFormModal')">Отмена</button>
+          <button type="submit" class="btn">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <div class="modal" id="expenseModal">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <div class="modal-title">💸 Добавить расход</div>
+        <button class="close-btn" onclick="closeModal('expenseModal')">×</button>
+      </div>
+      <form onsubmit="saveExpense(event)">
+        <div class="form-group">
+          <label>Дата</label>
+          <input type="date" id="expenseDate" required>
+        </div>
+        <div class="form-group">
+          <label>Группа</label>
+          <select id="expenseGroup" required></select>
+        </div>
+        <div class="form-group">
+          <label>Сумма (₽)</label>
+          <input type="number" id="expenseAmount" min="0" required>
+        </div>
+        <div class="form-group">
+          <label>Причина</label>
+          <input type="text" id="expenseReason" placeholder="Аренда оплачена, занятие отменено">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn secondary" onclick="closeModal('expenseModal')">Отмена</button>
+          <button type="submit" class="btn">Добавить</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
-const TelegramBot = require('node-telegram-bot-api');
-const fs = require('fs-extra');
-const path = require('path');
-const mammoth = require('mammoth');
-
-// ================= CONFIG =================
-const TOKEN = process.env.BOT_TOKEN || 'PUT_YOUR_TELEGRAM_BOT_TOKEN_HERE';
-const DATA_DIR = path.join(__dirname, 'data');
-
-const FILES = {
-  records: path.join(DATA_DIR, 'records.json'),
-  teachers: path.join(DATA_DIR, 'teachers.json'),
-  groups: path.join(DATA_DIR, 'groups.json'),
-  expenses: path.join(DATA_DIR, 'expenses.json'),
-};
-
-// ================= INIT =================
-const bot = new TelegramBot(TOKEN, { polling: true });
-
-fs.ensureDirSync(DATA_DIR);
-
-// init files with defaults
-if (!fs.existsSync(FILES.records)) fs.writeJsonSync(FILES.records, []);
-if (!fs.existsSync(FILES.teachers)) fs.writeJsonSync(FILES.teachers, []);
-if (!fs.existsSync(FILES.groups)) fs.writeJsonSync(FILES.groups, []);
-if (!fs.existsSync(FILES.expenses))
-  fs.writeJsonSync(FILES.expenses, {
-    rent: 0,
-    utilities: 0,
-    water: 0,
-    admin: 0,
-    paymentRate: 280,
-  });
-
-// ================= HELPERS =================
-const readJSON = (file) => fs.readJsonSync(file);
-const writeJSON = (file, data) => fs.writeJsonSync(file, data, { spaces: 2 });
-
-const uid = () => Date.now() + Math.random().toString(36).slice(2, 8);
-
-const isValidDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
-const isValidMonth = (s) => /^\d{4}-\d{2}$/.test(s);
-
-const csvWithBOM = (content) => '\uFEFF' + content;
-
-const monthOf = (date) => date.slice(0, 7);
-
-// ================= COMMANDS =================
-bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(
-    msg.chat.id,
-    `👋 Бот учета занятий «Московское долголетие»
-
-Команды:
-/add Группа;YYYY-MM-DD;Педагог;Кол-во
-/bulk (загрузка .docx)
-/report YYYY-MM
-/export YYYY-MM
-/teachers
-/groups
-/expenses`
-  );
-});
-
-// ================= ADD SINGLE RECORD =================
-bot.onText(/\/add (.+)/, (msg, match) => {
-  try {
-    const [group, date, teacherName, countStr] = match[1].split(';').map((s) => s.trim());
-    const count = Number(countStr);
-
-    if (!group || !date || !teacherName || !Number.isFinite(count))
-      return bot.sendMessage(msg.chat.id, '❌ Неверный формат данных');
-
-    if (!isValidDate(date))
-      return bot.sendMessage(msg.chat.id, '❌ Дата должна быть YYYY-MM-DD');
-
-    const groups = readJSON(FILES.groups);
-    if (!groups.includes(group))
-      return bot.sendMessage(msg.chat.id, '❌ Группа не найдена');
-
-    const teachers = readJSON(FILES.teachers);
-    const teacher = teachers.find((t) => t.name === teacherName);
-    if (!teacher)
-      return bot.sendMessage(msg.chat.id, '❌ Педагог не найден');
-
-    const records = readJSON(FILES.records);
-    records.push({
-      id: uid(),
-      group,
-      date,
-      teacher: teacher.id,
-      count,
-    });
-
-    writeJSON(FILES.records, records);
-    bot.sendMessage(msg.chat.id, '✅ Запись добавлена');
-  } catch (e) {
-    bot.sendMessage(msg.chat.id, '❌ Ошибка: ' + e.message);
-  }
-});
-
-// ================= BULK DOCX =================
-bot.on('document', async (msg) => {
-  if (!msg.caption || !msg.caption.startsWith('/bulk')) return;
-
-  try {
-    const file = await bot.downloadFile(msg.document.file_id, DATA_DIR);
-    const result = await mammoth.extractRawText({ path: file });
-    const text = result.value;
-
-    // Ожидаемый примитивный формат:
-    // Группа: XXX
-    // 2025-01-10 - 12
-    // 2025-01-12 - 10
-    // Итого: 22
-
-    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-    const groupLine = lines.find((l) => l.toLowerCase().startsWith('группа'));
-    if (!groupLine) throw new Error('Группа не найдена');
-
-    const group = groupLine.split(':')[1].trim();
-    const groups = readJSON(FILES.groups);
-    if (!groups.includes(group)) throw new Error('Группа не зарегистрирована');
-
-    const teachers = readJSON(FILES.teachers);
-    if (teachers.length !== 1)
-      throw new Error('Для bulk должен быть ровно 1 педагог');
-
-    const teacher = teachers[0];
-
-    const records = readJSON(FILES.records);
-    let created = 0;
-
-    for (const l of lines) {
-      if (/итого/i.test(l)) continue;
-      if (/^\d{4}-\d{2}-\d{2}/.test(l)) {
-        const [d, c] = l.split('-').map((x) => x.trim());
-        const count = Number(c);
-        if (!isValidDate(d) || !Number.isFinite(count)) continue;
-
-        records.push({
-          id: uid(),
-          group,
-          date: d,
-          teacher: teacher.id,
-          count,
+  <script>
+    const GRANT_PER_PERSON = 280;
+    const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+    
+    let groups = [];
+    let calendar = [];
+    let sessions = [];
+    let expenses = [];
+    let currentMonth = new Date(2025, 0, 1);
+    
+    function loadData() {
+      groups = JSON.parse(localStorage.getItem('groups') || '[]');
+      calendar = JSON.parse(localStorage.getItem('calendar') || '[]');
+      sessions = JSON.parse(localStorage.getItem('sessions') || '[]');
+      expenses = JSON.parse(localStorage.getItem('expenses') || '[]');
+      
+      if (groups.length === 0) {
+        groups = [{
+          id: 1,
+          code: "G-02250378",
+          name: "Танцы",
+          teacher: "Екатерина Иванова",
+          location: "Буденного",
+          salaryType: "percent",
+          salaryValue: 50,
+          hallCost: 0
+        }];
+      }
+      
+      updateDisplay();
+    }
+    
+    function saveData() {
+      localStorage.setItem('groups', JSON.stringify(groups));
+      localStorage.setItem('calendar', JSON.stringify(calendar));
+      localStorage.setItem('sessions', JSON.stringify(sessions));
+      localStorage.setItem('expenses', JSON.stringify(expenses));
+    }
+    
+    function showAlert(msg, type = 'success') {
+      const alert = document.createElement('div');
+      alert.className = `alert ${type === 'error' ? 'error' : ''}`;
+      alert.textContent = msg;
+      document.body.appendChild(alert);
+      setTimeout(() => alert.remove(), 3000);
+    }
+    
+    function formatNumber(num) {
+      return num.toLocaleString('ru-RU');
+    }
+    
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+    
+    // ГРУППЫ
+    function showGroupsModal() {
+      renderGroupsList();
+      document.getElementById('groupsModal').classList.add('active');
+    }
+    
+    function showAddGroupForm() {
+      document.getElementById('groupFormTitle').textContent = 'Новая группа';
+      document.getElementById('editGroupId').value = '';
+      document.getElementById('groupCode').value = '';
+      document.getElementById('groupName').value = '';
+      document.getElementById('groupTeacher').value = '';
+      document.getElementById('groupLocation').value = 'Буденного';
+      document.getElementById('groupSalaryType').value = 'percent';
+      document.getElementById('groupSalaryValue').value = '50';
+      document.getElementById('groupHallCost').value = '0';
+      toggleSalaryLabel();
+      closeModal('groupsModal');
+      document.getElementById('groupFormModal').classList.add('active');
+    }
+    
+    function showEditGroupForm(id) {
+      const g = groups.find(x => x.id === id);
+      if (!g) return;
+      
+      document.getElementById('groupFormTitle').textContent = 'Редактировать';
+      document.getElementById('editGroupId').value = g.id;
+      document.getElementById('groupCode').value = g.code;
+      document.getElementById('groupName').value = g.name;
+      document.getElementById('groupTeacher').value = g.teacher;
+      document.getElementById('groupLocation').value = g.location;
+      document.getElementById('groupSalaryType').value = g.salaryType;
+      document.getElementById('groupSalaryValue').value = g.salaryValue;
+      document.getElementById('groupHallCost').value = g.hallCost;
+      toggleSalaryLabel();
+      closeModal('groupsModal');
+      document.getElementById('groupFormModal').classList.add('active');
+    }
+    
+    function toggleSalaryLabel() {
+      const type = document.getElementById('groupSalaryType').value;
+      document.getElementById('groupSalaryLabel').textContent = 
+        type === 'percent' ? 'Процент (%) *' : 'Ставка (₽) *';
+    }
+    
+    function renderGroupsList() {
+      const container = document.getElementById('groupsList');
+      if (groups.length === 0) {
+        container.innerHTML = '<p style="color: #94a3b8; text-align: center; padding: 20px;">Нет групп</p>';
+        return;
+      }
+      
+      container.innerHTML = groups.map(g => `
+        <div class="group-card">
+          <h3>${g.code} - ${g.name}</h3>
+          <p>👤 ${g.teacher} • 📍 ${g.location}<br>
+          💰 ${g.salaryType === 'percent' ? g.salaryValue + '%' : formatNumber(g.salaryValue) + '₽'}
+          ${g.hallCost > 0 ? ' • 🏢 ' + formatNumber(g.hallCost) + '₽' : ''}</p>
+          <div style="display: flex; gap: 5px;">
+            <button class="btn secondary small" onclick="showEditGroupForm(${g.id})">✏️ Изменить</button>
+            <button class="btn secondary small" onclick="deleteGroup(${g.id})">🗑️</button>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    function saveGroup(e) {
+      e.preventDefault();
+      
+      const editId = document.getElementById('editGroupId').value;
+      const data = {
+        code: document.getElementById('groupCode').value.trim(),
+        name: document.getElementById('groupName').value.trim(),
+        teacher: document.getElementById('groupTeacher').value.trim(),
+        location: document.getElementById('groupLocation').value,
+        salaryType: document.getElementById('groupSalaryType').value,
+        salaryValue: parseFloat(document.getElementById('groupSalaryValue').value),
+        hallCost: parseFloat(document.getElementById('groupHallCost').value) || 0
+      };
+      
+      if (editId) {
+        const g = groups.find(x => x.id === parseInt(editId));
+        if (g) Object.assign(g, data);
+      } else {
+        data.id = groups.length > 0 ? Math.max(...groups.map(x => x.id)) + 1 : 1;
+        groups.push(data);
+      }
+      
+      saveData();
+      closeModal('groupFormModal');
+      showAlert(editId ? 'Обновлено!' : 'Группа добавлена!');
+      showGroupsModal();
+    }
+    
+    function deleteGroup(id) {
+      if (!confirm('Удалить группу?')) return;
+      groups = groups.filter(g => g.id !== id);
+      saveData();
+      renderGroupsList();
+    }
+    
+    // КАЛЕНДАРЬ
+    function showCalendarModal() {
+      renderCalendar();
+      document.getElementById('calendarModal').classList.add('active');
+    }
+    
+    function changeMonth(delta) {
+      currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + delta, 1);
+      renderCalendar();
+    }
+    
+    function renderCalendar() {
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth();
+      
+      document.getElementById('currentMonth').textContent = `${MONTHS[month]} ${year}`;
+      
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const daysInMonth = lastDay.getDate();
+      const startDay = firstDay.getDay();
+      
+      let html = '<div class="calendar-grid">';
+      
+      ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'].forEach(d => {
+        html += `<div style="font-weight: bold; text-align: center; padding: 5px; font-size: 11px;">${d}</div>`;
+      });
+      
+      for (let i = 0; i < startDay; i++) {
+        html += '<div></div>';
+      }
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const cals = calendar.filter(c => c.date === dateStr);
+        
+        html += `
+          <div class="calendar-day ${cals.length > 0 ? 'has-schedule' : ''}" onclick="showAddToCalendar('${dateStr}')">
+            <div class="calendar-day-number">${day}</div>
+            ${cals.map(c => {
+              const g = groups.find(x => x.id === c.groupId);
+              return g ? `<div class="calendar-class">${c.time || '09:00'} ${g.teacher.split(' ')[0]}</div>` : '';
+            }).join('')}
+          </div>
+        `;
+      }
+      
+      html += '</div>';
+      document.getElementById('calendarContent').innerHTML = html;
+    }
+    
+    function showAddToCalendar(dateStr) {
+      document.getElementById('calTitle').textContent = new Date(dateStr).toLocaleDateString('ru-RU');
+      document.getElementById('calDate').value = dateStr;
+      
+      const select = document.getElementById('calGroup');
+      select.innerHTML = '<option value="">Выберите</option>' +
+        groups.map(g => `<option value="${g.id}">${g.code} - ${g.name}</option>`).join('');
+      
+      document.getElementById('addToCalendarModal').classList.add('active');
+    }
+    
+    function saveToCalendar(e) {
+      e.preventDefault();
+      
+      const dateStr = document.getElementById('calDate').value;
+      const groupId = parseInt(document.getElementById('calGroup').value);
+      const time = document.getElementById('calTime').value;
+      
+      const exists = calendar.find(c => c.date === dateStr && c.groupId === groupId);
+      if (exists) {
+        showAlert('Уже добавлено!', 'error');
+        return;
+      }
+      
+      calendar.push({
+        id: calendar.length + 1,
+        date: dateStr,
+        time: time,
+        groupId: groupId
+      });
+      
+      saveData();
+      closeModal('addToCalendarModal');
+      renderCalendar();
+      showAlert('Добавлено!');
+    }
+    
+    // РАСХОДЫ
+    function showAddExpenseModal() {
+      document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
+      
+      const select = document.getElementById('expenseGroup');
+      select.innerHTML = '<option value="">Выберите</option>' +
+        groups.map(g => `<option value="${g.id}">${g.code} - ${g.name}</option>`).join('');
+      
+      document.getElementById('expenseModal').classList.add('active');
+    }
+    
+    function saveExpense(e) {
+      e.preventDefault();
+      
+      expenses.push({
+        id: expenses.length + 1,
+        date: document.getElementById('expenseDate').value,
+        groupId: parseInt(document.getElementById('expenseGroup').value),
+        amount: parseFloat(document.getElementById('expenseAmount').value),
+        reason: document.getElementById('expenseReason').value
+      });
+      
+      saveData();
+      closeModal('expenseModal');
+      updateDisplay();
+      showAlert('Расход добавлен!');
+    }
+    
+    // ЗАГРУЗКА DOCX
+    function showUploadModal() {
+      document.getElementById('uploadContent').innerHTML = `
+        <div class="upload-zone" onclick="document.getElementById('docxFile').click()">
+          <div class="upload-icon">📄</div>
+          <div class="upload-text">Выберите DOCX</div>
+          <div class="upload-hint">Отчет посещаемости</div>
+        </div>
+        <input type="file" id="docxFile" accept=".docx" style="display: none;" onchange="handleFileUpload(event)">
+      `;
+      document.getElementById('uploadModal').classList.add('active');
+    }
+    
+    async function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      showAlert('Обработка...');
+      
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        const text = result.value;
+        
+        console.log('Текст:', text.substring(0, 1000));
+        
+        const parsedData = parseReport(text);
+        
+        if (!parsedData) {
+          showAlert('Не удалось распознать', 'error');
+          return;
+        }
+        
+        showPreview(parsedData);
+        
+      } catch (error) {
+        console.error(error);
+        showAlert('Ошибка: ' + error.message, 'error');
+      }
+    }
+    
+    function parseReport(text) {
+      console.log('=== ПАРСИНГ ===');
+      
+      const codeMatch = text.match(/код\s+группы[:\s]+([A-Z]-\d+)/i) || text.match(/([A-Z]-\d{8})/);
+      
+      if (!codeMatch) {
+        showAlert('Код группы не найден', 'error');
+        return null;
+      }
+      
+      const code = codeMatch[1];
+      console.log('Код:', code);
+      
+      const group = groups.find(g => g.code === code);
+      if (!group) {
+        showAlert(`Группа ${code} не найдена!`, 'error');
+        return null;
+      }
+      
+      const allDates = [...text.matchAll(/(\d{2})\.(\d{2})/g)];
+      console.log('Дат найдено:', allDates.length);
+      
+      const uniqueDates = [];
+      const seen = new Set();
+      
+      for (let m of allDates) {
+        const ds = `${m[1]}.${m[2]}`;
+        if (!seen.has(ds) && parseInt(m[1]) <= 31 && parseInt(m[2]) <= 12) {
+          seen.add(ds);
+          uniqueDates.push(m);
+          if (uniqueDates.length >= 15) break;
+        }
+      }
+      
+      console.log('Уникальных дат:', uniqueDates.length);
+      
+      if (uniqueDates.length === 0) {
+        showAlert('Даты не найдены', 'error');
+        return null;
+      }
+      
+      const year = new Date().getFullYear();
+      const sessionData = [];
+      
+      uniqueDates.forEach((m, idx) => {
+        const day = m[1];
+        const month = m[2];
+        const dateStr = `${day}.${month}`;
+        const fullDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        
+        const datePos = text.indexOf(dateStr);
+        const nextDate = uniqueDates[idx + 1];
+        const nextPos = nextDate ? text.indexOf(`${nextDate[1]}.${nextDate[2]}`, datePos + 1) : -1;
+        
+        let segment;
+        if (nextPos > 0) {
+          segment = text.substring(datePos, nextPos);
+        } else {
+          const itogo = text.indexOf('Итого', datePos);
+          segment = text.substring(datePos, itogo > 0 ? itogo : datePos + 2000);
+        }
+        
+        const plusCount = (segment.match(/\+/g) || []).length;
+        
+        console.log(`${dateStr}: ${plusCount} чел`);
+        
+        if (plusCount > 0) {
+          const calEntry = calendar.find(c => c.date === fullDate);
+          const finalGroup = calEntry ? groups.find(g => g.id === calEntry.groupId) : group;
+          
+          sessionData.push({
+            date: fullDate,
+            time: calEntry?.time || '09:00',
+            people: plusCount,
+            group: finalGroup || group
+          });
+        }
+      });
+      
+      console.log('Занятий:', sessionData.length);
+      console.log('Всего людей:', sessionData.reduce((s, x) => s + x.people, 0));
+      
+      if (sessionData.length === 0) {
+        showAlert('Посещаемость не найдена', 'error');
+        return null;
+      }
+      
+      return { sessions: sessionData };
+    }
+    
+    function showPreview(data) {
+      const { sessions: parsed } = data;
+      
+      const totalPeople = parsed.reduce((s, x) => s + x.people, 0);
+      const totalIncome = totalPeople * GRANT_PER_PERSON;
+      
+      const byTeacher = {};
+      parsed.forEach(s => {
+        const t = s.group.teacher;
+        if (!byTeacher[t]) {
+          byTeacher[t] = { teacher: t, sessions: [], income: 0, salary: 0 };
+        }
+        
+        byTeacher[t].sessions.push(s);
+        const inc = s.people * GRANT_PER_PERSON;
+        byTeacher[t].income += inc;
+        
+        if (s.group.salaryType === 'fixed') {
+          byTeacher[t].salary += s.group.salaryValue;
+        } else {
+          byTeacher[t].salary += Math.round((inc * s.group.salaryValue) / 100);
+        }
+      });
+      
+      const html = `
+        <div class="info-box" style="border-left-color: #22c55e;">
+          <div class="info-title">✅ Обработано!</div>
+        </div>
+        
+        <div class="preview-section">
+          <div class="preview-title">📊 Данные</div>
+          <div class="preview-item"><strong>Занятий:</strong> ${parsed.length}</div>
+          <div class="preview-item">
+            <strong>Участников:</strong> 
+            <span style="font-size: 20px; color: #4ade80; font-weight: bold;">${totalPeople}</span>
+          </div>
+          <div class="preview-item"><strong>Грант:</strong> <span class="green">${formatNumber(totalIncome)}₽</span></div>
+        </div>
+        
+        <div class="preview-section" style="max-height: 250px; overflow-y: auto;">
+          <div class="preview-title">📅 По датам</div>
+          ${parsed.map(s => `
+            <div style="padding: 6px; background: #1e293b; border-radius: 4px; margin-bottom: 3px; font-size: 12px;">
+              <strong>${s.date}</strong> ${s.time} • ${s.group.name} • 
+              <span style="color: #4ade80; font-weight: bold;">${s.people} чел.</span>
+            </div>
+          `).join('')}
+        </div>
+        
+        ${Object.values(byTeacher).map(t => `
+          <div class="preview-section">
+            <div class="preview-title">👤 ${t.teacher}</div>
+            <div class="preview-item"><strong>Занятий:</strong> ${t.sessions.length}</div>
+            <div class="preview-item"><strong>Людей:</strong> ${t.sessions.reduce((s, x) => s + x.people, 0)}</div>
+            <div class="preview-item"><strong>Грант:</strong> <span class="green">${formatNumber(t.income)}₽</span></div>
+            <div class="preview-item"><strong>Зарплата:</strong> <span class="yellow">${formatNumber(t.salary)}₽</span></div>
+          </div>
+        `).join('')}
+        
+        <div class="form-actions">
+          <button class="btn secondary" onclick="closeModal('uploadModal')">Отмена</button>
+          <button class="btn success" onclick='confirmImport(${JSON.stringify(data).replace(/'/g, "&#39;")})'>✅ Добавить</button>
+        </div>
+      `;
+      
+      document.getElementById('uploadContent').innerHTML = html;
+    }
+    
+    function confirmImport(data) {
+      data.sessions.forEach(s => {
+        sessions.push({
+          id: sessions.length + 1,
+          groupId: s.group.id,
+          date: s.date,
+          time: s.time,
+          people: s.people,
+          teacher: s.group.teacher
         });
-        created++;
+      });
+      
+      saveData();
+      closeModal('uploadModal');
+      updateDisplay();
+      showAlert(`✅ Добавлено ${data.sessions.length} занятий!`);
+    }
+    
+    // ОТОБРАЖЕНИЕ
+    function updateDisplay() {
+      renderStats();
+      renderTable();
+    }
+    
+    function renderStats() {
+      const totalSessions = sessions.length;
+      const totalPeople = sessions.reduce((s, x) => s + x.people, 0);
+      const totalIncome = totalPeople * GRANT_PER_PERSON;
+      
+      let totalSalary = 0;
+      let totalHallCost = 0;
+      
+      sessions.forEach(s => {
+        const g = groups.find(x => x.id === s.groupId);
+        if (!g) return;
+        
+        const inc = s.people * GRANT_PER_PERSON;
+        if (g.salaryType === 'fixed') {
+          totalSalary += g.salaryValue;
+        } else {
+          totalSalary += Math.round((inc * g.salaryValue) / 100);
+        }
+        totalHallCost += g.hallCost;
+      });
+      
+      expenses.forEach(e => {
+        totalHallCost += e.amount;
+      });
+      
+      const totalProfit = totalIncome - totalSalary - totalHallCost;
+      const teachers = new Set(sessions.map(s => s.teacher)).size;
+      
+      document.getElementById('statsContainer').innerHTML = `
+        <div class="stat-card">
+          <div class="stat-label">Педагогов</div>
+          <div class="stat-value">${teachers}</div>
+        </div>
+        <div class="stat-card purple">
+          <div class="stat-label">Участников</div>
+          <div class="stat-value">${totalPeople}</div>
+          <div class="stat-change">${totalSessions} занятий</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-label">Грант</div>
+          <div class="stat-value">${formatNumber(totalIncome)}₽</div>
+        </div>
+        <div class="stat-card yellow">
+          <div class="stat-label">Зарплаты</div>
+          <div class="stat-value">${formatNumber(totalSalary)}₽</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-label">Аренда</div>
+          <div class="stat-value">${formatNumber(totalHallCost)}₽</div>
+          <div class="stat-change">${expenses.length > 0 ? '+ расходы' : ''}</div>
+        </div>
+        <div class="stat-card" style="background: linear-gradient(135deg, #0e7490, #0891b2);">
+          <div class="stat-label">Прибыль</div>
+          <div class="stat-value">${formatNumber(totalProfit)}₽</div>
+        </div>
+      `;
+    }
+    
+    function renderTable() {
+      const byTeacher = {};
+      
+      sessions.forEach(s => {
+        const t = s.teacher;
+        if (!byTeacher[t]) {
+          byTeacher[t] = { teacher: t, groups: new Set(), sessions: 0, people: 0, income: 0, salary: 0, hallCost: 0 };
+        }
+        
+        byTeacher[t].groups.add(s.groupId);
+        byTeacher[t].sessions++;
+        byTeacher[t].people += s.people;
+        
+        const g = groups.find(x => x.id === s.groupId);
+        if (g) {
+          const inc = s.people * GRANT_PER_PERSON;
+          byTeacher[t].income += inc;
+          
+          if (g.salaryType === 'fixed') {
+            byTeacher[t].salary += g.salaryValue;
+          } else {
+            byTeacher[t].salary += Math.round((inc * g.salaryValue) / 100);
+          }
+          
+          byTeacher[t].hallCost += g.hallCost;
+        }
+      });
+      
+      const teacherData = Object.values(byTeacher).map(t => ({
+        ...t,
+        groups: t.groups.size,
+        profit: t.income - t.salary - t.hallCost
+      }));
+      
+      const tbody = document.getElementById('tableBody');
+      const tfoot = document.getElementById('tableFoot');
+      
+      if (teacherData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #94a3b8; padding: 30px;">Нет данных</td></tr>';
+        tfoot.innerHTML = '';
+        return;
       }
+      
+      tbody.innerHTML = teacherData.map(t => `
+        <tr>
+          <td style="font-weight: bold;">${t.teacher}</td>
+          <td class="text-center">${t.sessions}</td>
+          <td class="text-center"><span class="badge" style="background: #7c3aed;">${t.people}</span></td>
+          <td class="text-right"><span class="amount green">${formatNumber(t.income)}₽</span></td>
+          <td class="text-right"><span class="amount yellow">${formatNumber(t.salary)}₽</span></td>
+          <td class="text-right"><span class="amount red">${formatNumber(t.hallCost)}₽</span></td>
+          <td class="text-right"><span class="amount blue">${formatNumber(t.profit)}₽</span></td>
+        </tr>
+      `).join('');
+      
+      const totals = {
+        sessions: sessions.length,
+        people: sessions.reduce((s, x) => s + x.people, 0),
+        income: teacherData.reduce((s, t) => s + t.income, 0),
+        salary: teacherData.reduce((s, t) => s + t.salary, 0),
+        hallCost: teacherData.reduce((s, t) => s + t.hallCost, 0) + expenses.reduce((s, e) => s + e.amount, 0),
+        profit: teacherData.reduce((s, t) => s + t.profit, 0) - expenses.reduce((s, e) => s + e.amount, 0)
+      };
+      
+      tfoot.innerHTML = `
+        <tr>
+          <td>ИТОГО:</td>
+          <td class="text-center">${totals.sessions}</td>
+          <td class="text-center purple">${totals.people}</td>
+          <td class="text-right green">${formatNumber(totals.income)}₽</td>
+          <td class="text-right yellow">${formatNumber(totals.salary)}₽</td>
+          <td class="text-right red">${formatNumber(totals.hallCost)}₽</td>
+          <td class="text-right blue">${formatNumber(totals.profit)}₽</td>
+        </tr>
+      `;
     }
-
-    writeJSON(FILES.records, records);
-    bot.sendMessage(msg.chat.id, `✅ Создано записей: ${created}`);
-  } catch (e) {
-    bot.sendMessage(msg.chat.id, '❌ Bulk ошибка: ' + e.message);
-  }
-});
-
-// ================= REPORT =================
-bot.onText(/\/report (.+)/, (msg, match) => {
-  try {
-    const ym = match[1].trim();
-    if (!isValidMonth(ym))
-      return bot.sendMessage(msg.chat.id, '❌ Формат YYYY-MM');
-
-    const records = readJSON(FILES.records).filter(
-      (r) => monthOf(r.date) === ym
-    );
-    const teachers = readJSON(FILES.teachers);
-    const expenses = readJSON(FILES.expenses);
-
-    let totalIncome = 0;
-    let totalSalaries = 0;
-    const byTeacher = {};
-
-    for (const r of records) {
-      const teacher = teachers.find((t) => t.id === r.teacher);
-      if (!teacher) continue;
-
-      const income = r.count * expenses.paymentRate;
-      const salary = (income * teacher.rate) / 100;
-
-      totalIncome += income;
-      totalSalaries += salary;
-
-      byTeacher[teacher.name] = (byTeacher[teacher.name] || 0) + salary;
-    }
-
-    const fixed =
-      expenses.rent +
-      expenses.utilities +
-      expenses.water +
-      expenses.admin;
-
-    const netProfit = totalIncome - totalSalaries - fixed;
-
-    let text = `📊 Отчет за ${ym}
-
-Доход: ${totalIncome}
-Зарплаты: ${totalSalaries}
-Расходы: ${fixed}
-Прибыль: ${netProfit}
-
-👩‍🏫 По педагогам:
-`;
-
-    for (const [name, sum] of Object.entries(byTeacher)) {
-      text += `${name}: ${sum}\n`;
-    }
-
-    bot.sendMessage(msg.chat.id, text);
-  } catch (e) {
-    bot.sendMessage(msg.chat.id, '❌ Ошибка отчета: ' + e.message);
-  }
-});
-
-// ================= EXPORT CSV =================
-bot.onText(/\/export (.+)/, (msg, match) => {
-  try {
-    const ym = match[1].trim();
-    if (!isValidMonth(ym))
-      return bot.sendMessage(msg.chat.id, '❌ Формат YYYY-MM');
-
-    const records = readJSON(FILES.records).filter(
-      (r) => monthOf(r.date) === ym
-    );
-    const teachers = readJSON(FILES.teachers);
-    const expenses = readJSON(FILES.expenses);
-
-    let csv = 'Дата;Группа;Педагог;Посещения;Доход\n';
-
-    for (const r of records) {
-      const t = teachers.find((x) => x.id === r.teacher);
-      const income = r.count * expenses.paymentRate;
-      csv += `${r.date};${r.group};${t ? t.name : ''};${r.count};${income}\n`;
-    }
-
-    const filePath = path.join(DATA_DIR, `report-${ym}.csv`);
-    fs.writeFileSync(filePath, csvWithBOM(csv), 'utf8');
-
-    bot.sendDocument(msg.chat.id, filePath);
-  } catch (e) {
-    bot.sendMessage(msg.chat.id, '❌ Ошибка экспорта: ' + e.message);
-  }
-});
-
-// ================= TEACHERS CRUD =================
-bot.onText(/\/teachers/, (msg) => {
-  const teachers = readJSON(FILES.teachers);
-  let text = '👩‍🏫 Педагоги:\n';
-  teachers.forEach((t) => {
-    text += `${t.id} | ${t.name} | ${t.rate}%\n`;
-  });
-  text += '\nДобавить: /teachers add Имя;Ставка\nУдалить: /teachers del ID';
-  bot.sendMessage(msg.chat.id, text);
-});
-
-bot.onText(/\/teachers add (.+)/, (msg, m) => {
-  try {
-    const [name, rateStr] = m[1].split(';').map((s) => s.trim());
-    const rate = Number(rateStr);
-    if (!name || !Number.isFinite(rate)) throw new Error('Неверные данные');
-
-    const teachers = readJSON(FILES.teachers);
-    teachers.push({ id: uid(), name, rate });
-    writeJSON(FILES.teachers, teachers);
-    bot.sendMessage(msg.chat.id, '✅ Педагог добавлен');
-  } catch (e) {
-    bot.sendMessage(msg.chat.id, '❌ ' + e.message);
-  }
-});
-
-bot.onText(/\/teachers del (.+)/, (msg, m) => {
-  const id = m[1].trim();
-  bot.sendMessage(
-    msg.chat.id,
-    `⚠️ Удалить педагога ${id}? Напишите: YES`
-  ).then(() => {
-    bot.once('message', (ans) => {
-      if (ans.text === 'YES') {
-        const teachers = readJSON(FILES.teachers).filter((t) => t.id !== id);
-        writeJSON(FILES.teachers, teachers);
-        bot.sendMessage(msg.chat.id, '🗑️ Удалено');
-      }
-    });
-  });
-});
-
-// ================= GROUPS CRUD =================
-bot.onText(/\/groups/, (msg) => {
-  const groups = readJSON(FILES.groups);
-  bot.sendMessage(
-    msg.chat.id,
-    `👥 Группы:\n${groups.join('\n')}\n\nДобавить: /groups add Название\nУдалить: /groups del Название`
-  );
-});
-
-bot.onText(/\/groups add (.+)/, (msg, m) => {
-  const name = m[1].trim();
-  const groups = readJSON(FILES.groups);
-  if (groups.includes(name))
-    return bot.sendMessage(msg.chat.id, '❌ Уже существует');
-  groups.push(name);
-  writeJSON(FILES.groups, groups);
-  bot.sendMessage(msg.chat.id, '✅ Группа добавлена');
-});
-
-bot.onText(/\/groups del (.+)/, (msg, m) => {
-  const name = m[1].trim();
-  bot.sendMessage(
-    msg.chat.id,
-    `⚠️ Удалить группу "${name}"? Напишите: YES`
-  ).then(() => {
-    bot.once('message', (ans) => {
-      if (ans.text === 'YES') {
-        const groups = readJSON(FILES.groups).filter((g) => g !== name);
-        writeJSON(FILES.groups, groups);
-        bot.sendMessage(msg.chat.id, '🗑️ Удалено');
+    
+    window.addEventListener('click', e => {
+      if (e.target.classList.contains('modal')) {
+        e.target.classList.remove('active');
       }
     });
-  });
-});
-
-// ================= EXPENSES =================
-bot.onText(/\/expenses/, (msg) => {
-  const e = readJSON(FILES.expenses);
-  bot.sendMessage(
-    msg.chat.id,
-    `💸 Расходы:
-Аренда: ${e.rent}
-Коммунальные: ${e.utilities}
-Вода: ${e.water}
-Админ: ${e.admin}
-Ставка оплаты: ${e.paymentRate}
-
-Изменить: /expenses set поле значение`
-  );
-});
-
-bot.onText(/\/expenses set (.+)/, (msg, m) => {
-  try {
-    const [field, valueStr] = m[1].split(' ').map((s) => s.trim());
-    const value = Number(valueStr);
-    const e = readJSON(FILES.expenses);
-    if (!(field in e) || !Number.isFinite(value))
-      throw new Error('Неверное поле');
-    e[field] = value;
-    writeJSON(FILES.expenses, e);
-    bot.sendMessage(msg.chat.id, '✅ Обновлено');
-  } catch (e) {
-    bot.sendMessage(msg.chat.id, '❌ ' + e.message);
-  }
-});
+    
+    loadData();
+  </script>
+</body>
+</html>
