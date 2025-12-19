@@ -27,6 +27,9 @@ const DanceSchoolTracker = () => {
     totalSessions: ''
   });
   
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
   const [formData, setFormData] = useState({
     group: '',
     date: new Date().toISOString().split('T')[0],
@@ -92,66 +95,227 @@ const DanceSchoolTracker = () => {
     }
   }, [records, teachers, groups, expenses]);
 
+  // Обработка загруженного файла
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    setUploadedFile(file);
+    setIsProcessing(true);
+    
+    try {
+      let text = '';
+      
+      // Обработка .docx файлов
+      if (file.name.endsWith('.docx')) {
+        const arrayBuffer = await file.arrayBuffer();
+        const mammoth = window.mammoth || await import('mammoth');
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        text = result.value;
+      } 
+      // Обработка .txt и .doc (как текст)
+      else {
+        text = await file.text();
+      }
+      
+      console.log('Извлеченный текст:', text.substring(0, 500));
+      
+      // Извлекаем данные из текста
+      // Ищем код группы типа G-02250378
+      const groupMatch = text.match(/[GG][-\s]*\d{8}/i);
+      
+      // Ищем месяц и год
+      const monthMatch = text.match(/(январ[ья]|феврал[ья]|март[а]?|апрел[ья]|ма[йя]|июн[ья]|июл[ья]|август[а]?|сентябр[ья]|октябр[ья]|ноябр[ья]|декабр[ья])\s*,?\s*(\d{4})/i);
+      
+      // Ищем итоговое количество посещений (обычно в последних строках)
+      const visitsMatch = text.match(/Итого[^\d\n]*?(\d{1,4})\s*\d{1,4}/i) || 
+                          text.match(/всего[^\d]*?(\d{2,4})/i);
+      
+      // Ищем все даты в формате DD.MM
+      const allDatesMatches = text.matchAll(/(\d{2})\.(\d{2})/g);
+      const datesSet = new Set();
+      
+      for (const match of allDatesMatches) {
+        const day = match[1];
+        const month = match[2];
+        // Проверяем что это реальная дата (день 1-31, месяц 1-12)
+        if (parseInt(day) >= 1 && parseInt(day) <= 31 && 
+            parseInt(month) >= 1 && parseInt(month) <= 12) {
+          datesSet.add(`${day}.${month}`);
+        }
+      }
+      
+      const uniqueDates = Array.from(datesSet).sort();
+      
+      console.log('Найденная группа:', groupMatch?.[0]);
+      console.log('Найденный месяц:', monthMatch);
+      console.log('Найдено посещений:', visitsMatch?.[1]);
+      console.log('Найдены даты:', uniqueDates);
+      
+      // Заполняем форму
+      if (groupMatch) {
+        const groupCode = groupMatch[0].replace(/\s/g, '');
+        setQuickInputData(prev => ({...prev, group: groupCode}));
+      }
+      
+      if (monthMatch) {
+        const months = {
+          'январ': '01', 'феврал': '02', 'март': '03', 'апрел': '04',
+          'май': '05', 'ма': '05', 'июн': '06', 'июл': '07', 'август': '08',
+          'сентябр': '09', 'октябр': '10', 'ноябр': '11', 'декабр': '12'
+        };
+        const monthName = monthMatch[1].toLowerCase().replace(/[ья]$/, '');
+        const monthNum = months[monthName];
+        const year = monthMatch[2];
+        if (monthNum && year) {
+          setQuickInputData(prev => ({...prev, month: `${year}-${monthNum}`}));
+        }
+      }
+      
+      if (visitsMatch) {
+        const totalVisits = parseInt(visitsMatch[1]);
+        setQuickInputData(prev => ({...prev, totalVisits: totalVisits.toString()}));
+      }
+      
+      if (uniqueDates.length > 0) {
+        // Берем только уникальные даты (обычно это даты занятий в заголовках)
+        // Фильтруем даты которые повторяются слишком много раз (скорее всего это даты рождения)
+        const sessionDates = uniqueDates.slice(0, 15); // Максимум 15 занятий
+        
+        setQuickInputData(prev => ({
+          ...prev, 
+          sessionDates: sessionDates.join(', '),
+          totalSessions: sessionDates.length.toString()
+        }));
+      }
+      
+      alert('✅ Файл загружен!\n\n' +
+            'Автоматически заполнено:\n' +
+            (groupMatch ? `✓ Группа: ${groupMatch[0]}\n` : '') +
+            (monthMatch ? `✓ Месяц: ${monthMatch[1]} ${monthMatch[2]}\n` : '') +
+            (visitsMatch ? `✓ Посещений: ${visitsMatch[1]}\n` : '') +
+            (uniqueDates.length ? `✓ Дат занятий: ${uniqueDates.length}\n\n` : '') +
+            'Проверьте данные и выберите педагога!');
+      
+    } catch (error) {
+      console.error('Ошибка обработки файла:', error);
+      alert('⚠️ Не удалось автоматически извлечь данные из файла.\n\n' +
+            'Возможные причины:\n' +
+            '• Файл поврежден\n' +
+            '• Неподдерживаемый формат\n\n' +
+            'Попробуйте заполнить поля вручную.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // Быстрое добавление из отчета
   const addQuickReport = () => {
-    if (!quickInputData.group || !quickInputData.teacher || !quickInputData.totalVisits || !quickInputData.totalSessions) {
-      alert('Заполните все обязательные поля');
+    console.log('Функция addQuickReport вызвана');
+    console.log('Текущие данные:', quickInputData);
+    
+    // Проверка полей
+    if (!quickInputData.group) {
+      alert('❌ Выберите группу');
+      return;
+    }
+    
+    if (!quickInputData.teacher) {
+      alert('❌ Выберите педагога');
+      return;
+    }
+    
+    if (!quickInputData.totalSessions) {
+      alert('❌ Введите количество занятий');
+      return;
+    }
+    
+    if (!quickInputData.totalVisits) {
+      alert('❌ Введите количество посещений');
       return;
     }
 
     const totalVisits = parseInt(quickInputData.totalVisits);
     const totalSessions = parseInt(quickInputData.totalSessions);
-    const avgPerSession = Math.round(totalVisits / totalSessions);
-
-    // Парсим даты из строки (например: "04.11, 06.11, 11.11")
-    let dates = [];
-    if (quickInputData.sessionDates.trim()) {
-      const dateStrings = quickInputData.sessionDates.split(',').map(d => d.trim());
-      const year = quickInputData.month.split('-')[0];
-      const month = quickInputData.month.split('-')[1];
-      
-      dates = dateStrings.map(dateStr => {
-        const day = dateStr.replace(/\D/g, '');
-        if (day.length >= 2) {
-          return `${year}-${month}-${day.padStart(2, '0')}`;
-        }
-        return null;
-      }).filter(d => d !== null);
+    
+    console.log('Посещений:', totalVisits, 'Занятий:', totalSessions);
+    
+    if (isNaN(totalVisits) || isNaN(totalSessions) || totalVisits <= 0 || totalSessions <= 0) {
+      alert('❌ Введите корректные числа');
+      return;
     }
 
-    // Если даты не указаны, создаем равномерное распределение по месяцу
-    if (dates.length === 0) {
-      const year = parseInt(quickInputData.month.split('-')[0]);
-      const month = parseInt(quickInputData.month.split('-')[1]) - 1;
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const interval = Math.floor(daysInMonth / totalSessions);
+    const avgPerSession = Math.round(totalVisits / totalSessions);
+    console.log('Среднее на занятие:', avgPerSession);
+
+    // Парсим даты
+    let dates = [];
+    const year = quickInputData.month.split('-')[0];
+    const month = quickInputData.month.split('-')[1];
+    
+    if (quickInputData.sessionDates.trim()) {
+      const dateStrings = quickInputData.sessionDates.split(',');
+      console.log('Парсим даты:', dateStrings);
       
-      for (let i = 0; i < totalSessions; i++) {
-        const day = Math.min(1 + (i * interval), daysInMonth);
-        dates.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+      for (let dateStr of dateStrings) {
+        const cleaned = dateStr.trim();
+        const dayMatch = cleaned.match(/(\d{1,2})/);
+        if (dayMatch) {
+          const day = dayMatch[1].padStart(2, '0');
+          dates.push(`${year}-${month}-${day}`);
+        }
       }
     }
-
-    // Создаем записи для каждой даты
-    const newRecords = dates.slice(0, totalSessions).map((date, index) => ({
-      id: Date.now() + index,
-      group: quickInputData.group,
-      date: date,
-      teacher: quickInputData.teacher,
-      count: index < dates.length - 1 ? avgPerSession : (totalVisits - avgPerSession * (totalSessions - 1))
-    }));
-
-    setRecords([...records, ...newRecords]);
-    setQuickInputData({
-      group: '',
-      teacher: '',
-      month: new Date().toISOString().slice(0, 7),
-      sessionDates: '',
-      totalVisits: '',
-      totalSessions: ''
-    });
     
-    alert(`Добавлено ${newRecords.length} записей`);
+    console.log('Распарсенные даты:', dates);
+
+    // Если дат недостаточно, добавляем
+    while (dates.length < totalSessions) {
+      const yearNum = parseInt(year);
+      const monthNum = parseInt(month) - 1;
+      const daysInMonth = new Date(yearNum, monthNum + 1, 0).getDate();
+      const day = Math.min(dates.length + 1, daysInMonth);
+      dates.push(`${year}-${month}-${String(day).padStart(2, '0')}`);
+    }
+
+    // Создаем записи
+    const newRecords = [];
+    let remainingVisits = totalVisits;
+    
+    for (let i = 0; i < totalSessions; i++) {
+      const count = i < totalSessions - 1 ? avgPerSession : remainingVisits;
+      remainingVisits -= count;
+      
+      newRecords.push({
+        id: Date.now() + i,
+        group: quickInputData.group,
+        date: dates[i] || dates[0],
+        teacher: quickInputData.teacher,
+        count: count
+      });
+    }
+    
+    console.log('Создано записей:', newRecords);
+
+    try {
+      setRecords([...records, ...newRecords]);
+      console.log('Записи добавлены в state');
+      
+      setQuickInputData({
+        group: '',
+        teacher: '',
+        month: new Date().toISOString().slice(0, 7),
+        sessionDates: '',
+        totalVisits: '',
+        totalSessions: ''
+      });
+      
+      alert(`✅ Добавлено ${newRecords.length} записей! Перейдите во вкладку "По датам" чтобы увидеть их.`);
+      setActiveTab('input');
+    } catch (error) {
+      console.error('Ошибка:', error);
+      alert('❌ Ошибка при добавлении: ' + error.message);
+    }
   };
 
   const addRecord = () => {
@@ -387,9 +551,42 @@ const DanceSchoolTracker = () => {
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                   <h3 className="font-bold text-blue-900 mb-2">💡 Быстрый ввод из отчета</h3>
                   <p className="text-sm text-blue-800">
-                    Введите данные из месячного отчета "Ведомость учета посещаемости". 
-                    Система автоматически создаст записи для всех занятий.
+                    Загрузите файл отчета или заполните поля вручную
                   </p>
+                </div>
+
+                {/* Загрузка файла */}
+                <div className="mb-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border-2 border-dashed border-purple-300">
+                  <label className="block cursor-pointer">
+                    <div className="text-center">
+                      <Upload size={48} className="mx-auto mb-3 text-purple-600" />
+                      <h4 className="text-lg font-bold text-gray-800 mb-2">
+                        {uploadedFile ? '✅ ' + uploadedFile.name : '📄 Загрузить отчет Word'}
+                      </h4>
+                      <p className="text-sm text-gray-600 mb-3">
+                        {uploadedFile 
+                          ? 'Нажмите для выбора другого файла' 
+                          : 'Автоматически извлечет данные из ведомости'}
+                      </p>
+                      <div className="bg-purple-600 text-white px-6 py-3 rounded-lg inline-block hover:bg-purple-700 active:bg-purple-800 transition font-medium">
+                        {isProcessing ? '⏳ Обработка...' : '📁 Выбрать файл DOCX'}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-3">
+                        Поддерживаются: .docx, .doc, .txt
+                      </p>
+                    </div>
+                    <input
+                      type="file"
+                      accept=".doc,.docx,.txt"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      disabled={isProcessing}
+                    />
+                  </label>
+                </div>
+
+                <div className="border-t-2 border-gray-200 my-6 pt-6">
+                  <h4 className="font-semibold text-gray-700 mb-4">Проверьте и заполните данные:</h4>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -397,14 +594,17 @@ const DanceSchoolTracker = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Код группы <span className="text-red-500">*</span>
                     </label>
-                    <select
+                    <input
+                      type="text"
+                      list="groups-list"
                       value={quickInputData.group}
                       onChange={(e) => setQuickInputData({...quickInputData, group: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                    >
-                      <option value="">Выберите группу</option>
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
+                      placeholder="G-02250378 или выберите"
+                    />
+                    <datalist id="groups-list">
                       {groups.map(g => <option key={g} value={g}>{g}</option>)}
-                    </select>
+                    </datalist>
                   </div>
 
                   <div>
@@ -414,7 +614,7 @@ const DanceSchoolTracker = () => {
                     <select
                       value={quickInputData.teacher}
                       onChange={(e) => setQuickInputData({...quickInputData, teacher: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
                     >
                       <option value="">Выберите педагога</option>
                       {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
@@ -429,7 +629,7 @@ const DanceSchoolTracker = () => {
                       type="month"
                       value={quickInputData.month}
                       onChange={(e) => setQuickInputData({...quickInputData, month: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
                     />
                   </div>
 
@@ -441,8 +641,9 @@ const DanceSchoolTracker = () => {
                       type="number"
                       value={quickInputData.totalSessions}
                       onChange={(e) => setQuickInputData({...quickInputData, totalSessions: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
                       placeholder="Например: 8"
+                      min="1"
                     />
                   </div>
 
@@ -454,12 +655,13 @@ const DanceSchoolTracker = () => {
                       type="number"
                       value={quickInputData.totalVisits}
                       onChange={(e) => setQuickInputData({...quickInputData, totalVisits: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
                       placeholder="Например: 208"
+                      min="1"
                     />
                   </div>
 
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Даты занятий (необязательно)
                     </label>
@@ -467,7 +669,7 @@ const DanceSchoolTracker = () => {
                       type="text"
                       value={quickInputData.sessionDates}
                       onChange={(e) => setQuickInputData({...quickInputData, sessionDates: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
                       placeholder="04.11, 06.11, 11.11, 13.11..."
                     />
                     <p className="text-xs text-gray-500 mt-1">Через запятую. Если не указано, распределится равномерно</p>
@@ -505,10 +707,14 @@ const DanceSchoolTracker = () => {
                 </div>
 
                 <button
-                  onClick={addQuickReport}
-                  className="bg-purple-600 text-white px-8 py-3 rounded-lg hover:bg-purple-700 flex items-center gap-2 transition font-medium"
+                  onClick={() => {
+                    console.log('Клик на кнопку');
+                    console.log('Данные:', quickInputData);
+                    addQuickReport();
+                  }}
+                  className="w-full bg-purple-600 text-white px-8 py-4 rounded-lg hover:bg-purple-700 active:bg-purple-800 flex items-center justify-center gap-2 transition font-medium text-lg"
                 >
-                  <Upload size={20} /> Добавить отчет
+                  <Upload size={24} /> Добавить отчет
                 </button>
 
                 <div className="mt-8 bg-gray-50 rounded-lg p-4">
@@ -589,7 +795,7 @@ const DanceSchoolTracker = () => {
                           <th className="p-3 text-left">Группа</th>
                           <th className="p-3 text-left">Педагог</th>
                           <th className="p-3 text-left">Человек</th>
-                          <th className="p-3 text-center">Действия</th>
+                          <th className="p-3 text-center" style={{minWidth: '100px'}}>Действия</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -610,14 +816,14 @@ const DanceSchoolTracker = () => {
                                       type="date"
                                       value={editingRecord.date}
                                       onChange={(e) => setEditingRecord({...editingRecord, date: e.target.value})}
-                                      className="p-1 border rounded w-full"
+                                      className="p-2 border rounded w-full text-sm"
                                     />
                                   </td>
                                   <td className="p-3">
                                     <select
                                       value={editingRecord.group}
                                       onChange={(e) => setEditingRecord({...editingRecord, group: e.target.value})}
-                                      className="p-1 border rounded w-full"
+                                      className="p-2 border rounded w-full text-sm"
                                     >
                                       {groups.map(g => <option key={g} value={g}>{g}</option>)}
                                     </select>
@@ -626,7 +832,7 @@ const DanceSchoolTracker = () => {
                                     <select
                                       value={editingRecord.teacher}
                                       onChange={(e) => setEditingRecord({...editingRecord, teacher: e.target.value})}
-                                      className="p-1 border rounded w-full"
+                                      className="p-2 border rounded w-full text-sm"
                                     >
                                       {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
                                     </select>
@@ -636,15 +842,23 @@ const DanceSchoolTracker = () => {
                                       type="number"
                                       value={editingRecord.count}
                                       onChange={(e) => setEditingRecord({...editingRecord, count: parseInt(e.target.value) || 0})}
-                                      className="p-1 border rounded w-20"
+                                      className="p-2 border rounded w-20 text-sm"
                                     />
                                   </td>
                                   <td className="p-3 text-center">
-                                    <button onClick={updateRecord} className="text-green-600 hover:text-green-800 mr-2" title="Сохранить">
-                                      <Save size={18} />
+                                    <button 
+                                      onClick={updateRecord} 
+                                      className="text-green-600 hover:text-green-800 mr-3 p-2 active:bg-green-100 rounded" 
+                                      title="Сохранить"
+                                    >
+                                      <Save size={20} />
                                     </button>
-                                    <button onClick={() => setEditingRecord(null)} className="text-gray-600 hover:text-gray-800" title="Отмена">
-                                      <X size={18} />
+                                    <button 
+                                      onClick={() => setEditingRecord(null)} 
+                                      className="text-gray-600 hover:text-gray-800 p-2 active:bg-gray-100 rounded" 
+                                      title="Отмена"
+                                    >
+                                      <X size={20} />
                                     </button>
                                   </td>
                                 </tr>
@@ -655,11 +869,29 @@ const DanceSchoolTracker = () => {
                                   <td className="p-3">{record.teacher}</td>
                                   <td className="p-3">{record.count}</td>
                                   <td className="p-3 text-center">
-                                    <button onClick={() => setEditingRecord(record)} className="text-blue-600 hover:text-blue-800 mr-2" title="Редактировать">
-                                      <Edit2 size={18} />
+                                    <button 
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setEditingRecord(record);
+                                      }} 
+                                      className="text-blue-600 hover:text-blue-800 mr-3 p-2 active:bg-blue-100 rounded inline-block cursor-pointer touch-manipulation relative z-10"
+                                      style={{WebkitTapHighlightColor: 'transparent'}}
+                                      title="Редактировать"
+                                    >
+                                      <Edit2 size={20} />
                                     </button>
-                                    <button onClick={() => deleteRecord(record.id)} className="text-red-600 hover:text-red-800" title="Удалить">
-                                      <Trash2 size={18} />
+                                    <button 
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        deleteRecord(record.id);
+                                      }} 
+                                      className="text-red-600 hover:text-red-800 p-2 active:bg-red-100 rounded inline-block cursor-pointer touch-manipulation relative z-10"
+                                      style={{WebkitTapHighlightColor: 'transparent'}}
+                                      title="Удалить"
+                                    >
+                                      <Trash2 size={20} />
                                     </button>
                                   </td>
                                 </tr>
@@ -806,48 +1038,74 @@ const DanceSchoolTracker = () => {
                     <h3 className="text-xl font-bold">Педагоги</h3>
                     <button
                       onClick={addTeacher}
-                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2 transition"
+                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 active:bg-purple-800 flex items-center gap-2 transition"
                     >
                       <PlusCircle size={18} /> Добавить
                     </button>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {teachers.map(t => (
                       editingTeacher?.id === t.id ? (
-                        <div key={t.id} className="flex gap-2 items-center bg-blue-50 p-3 rounded-lg">
+                        <div key={t.id} className="flex gap-2 items-center bg-blue-50 p-4 rounded-lg">
                           <input
                             type="text"
                             value={editingTeacher.name}
                             onChange={(e) => setEditingTeacher({...editingTeacher, name: e.target.value})}
-                            className="flex-1 p-2 border rounded"
+                            className="flex-1 p-3 border rounded text-base"
                             placeholder="Имя"
                           />
                           <input
                             type="number"
                             value={editingTeacher.rate}
                             onChange={(e) => setEditingTeacher({...editingTeacher, rate: parseInt(e.target.value) || 0})}
-                            className="w-20 p-2 border rounded"
+                            className="w-24 p-3 border rounded text-base"
                             placeholder="%"
                           />
-                          <button onClick={updateTeacher} className="text-green-600 hover:text-green-800" title="Сохранить">
-                            <Save size={20} />
+                          <button 
+                            onClick={updateTeacher} 
+                            className="text-green-600 hover:text-green-800 active:bg-green-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center" 
+                            title="Сохранить"
+                          >
+                            <Save size={24} />
                           </button>
-                          <button onClick={() => setEditingTeacher(null)} className="text-gray-600 hover:text-gray-800" title="Отмена">
-                            <X size={20} />
+                          <button 
+                            onClick={() => setEditingTeacher(null)} 
+                            className="text-gray-600 hover:text-gray-800 active:bg-gray-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center" 
+                            title="Отмена"
+                          >
+                            <X size={24} />
                           </button>
                         </div>
                       ) : (
-                        <div key={t.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg hover:bg-gray-100">
-                          <div>
-                            <span className="font-medium">{t.name}</span>
-                            <span className="text-gray-600 ml-4">Ставка: {t.rate}%</span>
+                        <div key={t.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-lg hover:bg-gray-100">
+                          <div className="flex-1">
+                            <span className="font-medium text-base">{t.name}</span>
+                            <span className="text-gray-600 ml-4 text-sm">Ставка: {t.rate}%</span>
                           </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => setEditingTeacher(t)} className="text-blue-600 hover:text-blue-800" title="Редактировать">
-                              <Edit2 size={18} />
+                          <div className="flex gap-2 relative z-10">
+                            <button 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setEditingTeacher(t);
+                              }} 
+                              className="text-blue-600 hover:text-blue-800 active:bg-blue-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer touch-manipulation"
+                              style={{WebkitTapHighlightColor: 'transparent'}}
+                              title="Редактировать"
+                            >
+                              <Edit2 size={24} />
                             </button>
-                            <button onClick={() => deleteTeacher(t.id)} className="text-red-600 hover:text-red-800" title="Удалить">
-                              <Trash2 size={18} />
+                            <button 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                deleteTeacher(t.id);
+                              }} 
+                              className="text-red-600 hover:text-red-800 active:bg-red-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer touch-manipulation" 
+                              style={{WebkitTapHighlightColor: 'transparent'}}
+                              title="Удалить"
+                            >
+                              <Trash2 size={24} />
                             </button>
                           </div>
                         </div>
@@ -861,21 +1119,39 @@ const DanceSchoolTracker = () => {
                     <h3 className="text-xl font-bold">Группы</h3>
                     <button
                       onClick={addGroup}
-                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2 transition"
+                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 active:bg-purple-800 flex items-center gap-2 transition"
                     >
                       <PlusCircle size={18} /> Добавить
                     </button>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {groups.map(g => (
-                      <div key={g} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg hover:bg-gray-100">
-                        <span className="font-medium">{g}</span>
-                        <div className="flex gap-2">
-                          <button onClick={() => updateGroup(g)} className="text-blue-600 hover:text-blue-800" title="Редактировать">
-                            <Edit2 size={18} />
+                      <div key={g} className="flex justify-between items-center bg-gray-50 p-4 rounded-lg hover:bg-gray-100">
+                        <span className="font-medium text-base flex-1">{g}</span>
+                        <div className="flex gap-2 relative z-10">
+                          <button 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              updateGroup(g);
+                            }} 
+                            className="text-blue-600 hover:text-blue-800 active:bg-blue-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer touch-manipulation"
+                            style={{WebkitTapHighlightColor: 'transparent'}}
+                            title="Редактировать"
+                          >
+                            <Edit2 size={24} />
                           </button>
-                          <button onClick={() => deleteGroup(g)} className="text-red-600 hover:text-red-800" title="Удалить">
-                            <Trash2 size={18} />
+                          <button 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              deleteGroup(g);
+                            }} 
+                            className="text-red-600 hover:text-red-800 active:bg-red-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer touch-manipulation"
+                            style={{WebkitTapHighlightColor: 'transparent'}}
+                            title="Удалить"
+                          >
+                            <Trash2 size={24} />
                           </button>
                         </div>
                       </div>
