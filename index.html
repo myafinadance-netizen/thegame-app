@@ -1,1168 +1,185 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TheGame — Учёт доходов</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Зарплаты педагогов — Московское долголетие</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0b1220;
+    color: #fff;
+}
+
+.container {
+    max-width: 420px;
+    margin: auto;
+    padding: 16px;
+}
+
+h1 {
+    font-size: 20px;
+    margin-bottom: 6px;
+}
+
+.subtitle {
+    color: #9aa4b2;
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.buttons {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+button {
+    flex: 1;
+    padding: 10px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.btn-green { background: #1fa97a; color: #fff; }
+.btn-blue { background: #2563eb; color: #fff; }
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.card {
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 14px;
+}
+
+.card span {
+    display: block;
+    font-size: 26px;
+    font-weight: bold;
+    margin-top: 6px;
+}
+
+.blue { background: #1e3a8a; }
+.purple { background: #6d28d9; }
+.green { background: #065f46; }
+.orange { background: #92400e; }
+
+.table {
+    background: #111827;
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 20px;
+}
+
+.table h2 {
+    font-size: 16px;
+    margin-bottom: 10px;
+}
+
+.table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.table th, .table td {
+    padding: 8px 4px;
+    border-bottom: 1px solid #1f2937;
+    text-align: left;
+}
+
+.table th {
+    color: #9aa4b2;
+    font-weight: normal;
+}
+
+.help {
+    background: #0f172a;
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 13px;
+}
+
+.help ol {
+    padding-left: 18px;
+}
+
+.help li {
+    margin-bottom: 6px;
+    color: #cbd5e1;
+}
+</style>
 </head>
-<body class="bg-slate-900 text-white">
-  <div id="root"></div>
 
-  <script type="text/babel">
-    const { useState, useEffect } = React;
-    const tg = window.Telegram?.WebApp;
-
-    // UI icons (simple)
-    const Icon = ({children}) => <span className="inline-block align-middle mr-2">{children}</span>;
-
-    function App() {
-      const [activeTab, setActiveTab] = useState('monthlyReport'); // default main
-      const [loading, setLoading] = useState(true);
-
-      // Data states
-      const [dolgo, setDolgo] = useState([]); // Московское долголетие (array of sessions)
-      const [individuals, setIndividuals] = useState([]); // индивидуалки (detailed)
-      const [rentals, setRentals] = useState([]); // аренда зала (income)
-      const [expenses, setExpenses] = useState([]); // постоянные расходы
-      const [passive, setPassive] = useState([]); // пассивный доход
-      const [students, setStudents] = useState([]); // база учеников
-      const [monthlyArchive, setMonthlyArchive] = useState([]); // по месяцам (архив)
-
-      // Modal form state
-      const [showModal, setShowModal] = useState(false);
-      const [modalType, setModalType] = useState(null);
-      const [editingIndex, setEditingIndex] = useState(null);
-      const [form, setForm] = useState({});
-
-      // Locations and default hall expense mapping per spec
-      const locationDefaults = {
-        "Буденного": 0,
-        "Черкизовская": 0, // оплачивают педагоги
-        "Парк": 0
-      };
-
-      // Persist/load helpers (Telegram CloudStorage if available, else localStorage)
-      const loadKey = async (key, fallback) => {
-        try {
-          if (tg?.CloudStorage) {
-            return await new Promise((resolve) => {
-              tg.CloudStorage.getItem(key, (err, val) => {
-                if (!err && val) {
-                  try { resolve(JSON.parse(val)); } catch { resolve(fallback); }
-                } else resolve(fallback);
-              });
-            });
-          } else {
-            const raw = localStorage.getItem(key);
-            return raw ? JSON.parse(raw) : fallback;
-          }
-        } catch {
-          return fallback;
-        }
-      };
-
-      const saveKey = async (key, data) => {
-        try {
-          const val = JSON.stringify(data);
-          if (tg?.CloudStorage) tg.CloudStorage.setItem(key, val);
-          localStorage.setItem(key, val);
-        } catch (e) {
-          console.error('saveKey error', e);
-        }
-      };
-
-      useEffect(() => {
-        (async () => {
-          const [
-            _dolgo, _ind, _rent, _exp, _pass, _stud, _arch
-          ] = await Promise.all([
-            loadKey('dolgo', []),
-            loadKey('individuals', []),
-            loadKey('rentals', []),
-            loadKey('expenses', []),
-            loadKey('passive', []),
-            loadKey('students', []),
-            loadKey('monthlyArchive', [])
-          ]);
-          setDolgo(_dolgo);
-          setIndividuals(_ind);
-          setRentals(_rent);
-          setExpenses(_exp);
-          setPassive(_pass);
-          setStudents(_stud);
-          setMonthlyArchive(_arch);
-          setLoading(false);
-          try { tg?.expand && tg.expand(); } catch {}
-        })();
-      }, []);
-
-      // Autosave
-      useEffect(()=> { if(!loading) saveKey('dolgo', dolgo); }, [dolgo]);
-      useEffect(()=> { if(!loading) saveKey('individuals', individuals); }, [individuals]);
-      useEffect(()=> { if(!loading) saveKey('rentals', rentals); }, [rentals]);
-      useEffect(()=> { if(!loading) saveKey('expenses', expenses); }, [expenses]);
-      useEffect(()=> { if(!loading) saveKey('passive', passive); }, [passive]);
-      useEffect(()=> { if(!loading) saveKey('students', students); }, [students]);
-      useEffect(()=> { if(!loading) saveKey('monthlyArchive', monthlyArchive); }, [monthlyArchive]);
-
-      // Helpers: format
-      const fmt = (n) => new Intl.NumberFormat('ru-RU').format(Number(n || 0));
-
-      // Business logic calculations
-      // For "Долголетие" row: income = people * 280
-      // teacher expense depends on rate selection:
-      // '50%' => income * 0.5
-      // '700' => 700
-      // '1000' => 1000
-      // '100%' => income * 1.0
-      const calcTeacherExpense = (income, rate) => {
-        if (!rate) return 0;
-        if (rate === '50%') return Math.round(income * 0.5);
-        if (rate === '700') return 700;
-        if (rate === '1000') return 1000;
-        if (rate === '100%') return Math.round(income * 1.0);
-        // fallback numeric
-        const parsed = parseFloat(rate);
-        return Number.isFinite(parsed) ? parsed : 0;
-      };
-
-      // Totals per section
-      const totalDolgoIncome = dolgo.reduce((s,r)=> s + (Number(r.income)||0), 0);
-      const totalDolgoTeacherExpense = dolgo.reduce((s,r)=> s + calcTeacherExpense(Number(r.income)||0, r.rate), 0);
-      const totalDolgoHallExpense = dolgo.reduce((s,r)=> s + (Number(r.hallExpense)||0), 0);
-      const totalDolgoProfit = totalDolgoIncome - totalDolgoTeacherExpense - totalDolgoHallExpense;
-
-      const totalIndividualIncome = individuals.reduce((s,r)=> s + (Number(r.amount)||0), 0);
-      const totalRentalsIncome = rentals.reduce((s,r)=> s + (Number(r.amount)||0), 0);
-      const totalPassiveIncome = passive.reduce((s,r)=> s + (Number(r.monthly)||0), 0);
-      const totalExpenses = expenses.reduce((s,r)=> s + (Number(r.amount)||0), 0);
-
-      // Monthly report aggregation: categories per spec
-      const monthlyReport = [
-        { category: 'Московское долголетие', income: totalDolgoIncome, expense: totalDolgoTeacherExpense + totalDolgoHallExpense, profit: totalDolgoProfit },
-        { category: 'Индивидуальные уроки', income: totalIndividualIncome, expense: 0, profit: totalIndividualIncome },
-        { category: 'Аренда зала', income: totalRentalsIncome, expense: 0, profit: totalRentalsIncome },
-        { category: 'Пассивный', income: totalPassiveIncome, expense: 0, profit: totalPassiveIncome },
-        { category: 'Расходы', income: 0, expense: totalExpenses, profit: -totalExpenses },
-      ];
-      const totalReportIncome = monthlyReport.reduce((s,r)=> s + (r.income||0), 0);
-      const totalReportExpense = monthlyReport.reduce((s,r)=> s + (r.expense||0), 0);
-      const totalReportProfit = monthlyReport.reduce((s,r)=> s + (r.profit||0), 0);
-
-      // Analytics: top teachers/clubs by profit (build mapping)
-      // We'll aggregate profit per teacher/club from dolgo and individuals:
-      const profitMap = {};
-      dolgo.forEach(r=>{
-        const profit = (Number(r.income)||0) - calcTeacherExpense(Number(r.income)||0, r.rate) - (Number(r.hallExpense)||0);
-        const name = r.teacher || r.location || 'Без имени';
-        profitMap[name] = (profitMap[name]||0) + profit;
-      });
-      // treat rentals as club profit (renter name)
-      rentals.forEach(r=>{
-        const name = r.name || 'Аренда';
-        profitMap[name] = (profitMap[name]||0) + (Number(r.amount)||0);
-      });
-      // individuals: attribute to 'Индивидуалки' or client? We'll group under 'Индивидуалки' and by teacher if present
-      individuals.forEach(r=>{
-        const teacher = r.teacher || 'Индивидуалки';
-        profitMap[teacher] = (profitMap[teacher]||0) + (Number(r.amount)||0);
-      });
-
-      const topList = Object.entries(profitMap)
-        .map(([key,val])=> ({name:key, profit: Math.round(val)}))
-        .sort((a,b)=> b.profit - a.profit)
-        .slice(0,10);
-      const topTotal = topList.reduce((s,r)=> s + r.profit, 0);
-      const topWithShare = topList.map(t=> ({...t, share: topTotal ? Math.round((t.profit / topTotal)*100) : 0}));
-
-      // Students stats
-      const totalStudents = students.length;
-      const activeStudents = students.filter(s=> s.status === 'Активный').length;
-      const avgIncomePerStudent = totalStudents ? Math.round((totalReportProfit + totalIndividualIncome + totalPassiveIncome - totalExpenses) / totalStudents) : 0;
-
-      // Progress to 1M (per spec, initial 385,000 is starting amount - but better compute from current profit sum)
-      const baseStart = 385000;
-      const currentTotal = baseStart + (totalReportProfit); // simple approach
-      const goal = 1000000;
-      const progressPercent = Math.round((currentTotal / goal) * 100);
-
-      // Modal open
-      const openModal = (type, idx = null) => {
-        setModalType(type);
-        setEditingIndex(idx);
-        let data = {};
-        if (idx !== null) {
-          if (type === 'dolgo') data = {...dolgo[idx]};
-          if (type === 'individual') data = {...individuals[idx]};
-          if (type === 'rental') data = {...rentals[idx]};
-          if (type === 'expense') data = {...expenses[idx]};
-          if (type === 'passive') data = {...passive[idx]};
-          if (type === 'student') data = {...students[idx]};
-          if (type === 'archive') data = {...monthlyArchive[idx]};
-        } else {
-          // default empty
-          data = {};
-        }
-        setForm(data);
-        setShowModal(true);
-      };
-
-      const closeModal = () => { setShowModal(false); setForm({}); setEditingIndex(null); setModalType(null); };
-
-      // Save modal data
-      const saveModal = () => {
-        if (modalType === 'dolgo') {
-          // required fields: date, location, teacher, rate, people, hallExpense (editable)
-          const people = Number(form.people || 0);
-          const income = people * 280;
-          const row = {
-            date: form.date || '',
-            location: form.location || '',
-            teacher: form.teacher || '',
-            rate: form.rate || '50%',
-            people,
-            income,
-            hallExpense: Number(form.hallExpense || locationDefaults[form.location] || 0),
-            comment: form.comment || ''
-          };
-          if (editingIndex !== null) {
-            const copy = [...dolgo]; copy[editingIndex] = row; setDolgo(copy);
-          } else {
-            setDolgo([...dolgo, row]);
-          }
-        }
-        if (modalType === 'individual') {
-          const row = {
-            date: form.date || '',
-            type: form.type || 'Остальные',
-            client: form.client || '',
-            teacher: form.teacher || '',
-            amount: Number(form.amount || 0),
-            comment: form.comment || ''
-          };
-          if (editingIndex !== null) {
-            const copy = [...individuals]; copy[editingIndex] = row; setIndividuals(copy);
-          } else setIndividuals([...individuals, row]);
-        }
-        if (modalType === 'rental') {
-          const row = {
-            date: form.date || '',
-            name: form.name || '',
-            amount: Number(form.amount || 0),
-            comment: form.comment || ''
-          };
-          if (editingIndex !== null) { const copy=[...rentals]; copy[editingIndex]=row; setRentals(copy); }
-          else setRentals([...rentals, row]);
-        }
-        if (modalType === 'expense') {
-          const row = {
-            date: form.date || '',
-            type: form.type || '',
-            what: form.what || '',
-            amount: Number(form.amount || 0),
-            comment: form.comment || ''
-          };
-          if (editingIndex !== null) { const copy=[...expenses]; copy[editingIndex]=row; setExpenses(copy); }
-          else setExpenses([...expenses, row]);
-        }
-        if (modalType === 'passive') {
-          const row = {
-            date: form.date || '',
-            source: form.source || '',
-            monthly: Number(form.monthly || 0),
-            comment: form.comment || ''
-          };
-          if (editingIndex !== null) { const copy=[...passive]; copy[editingIndex]=row; setPassive(copy); }
-          else setPassive([...passive, row]);
-        }
-        if (modalType === 'student') {
-          const row = {
-            name: form.name || '',
-            phone: form.phone || '',
-            group: form.group || '',
-            subscription: form.subscription || '',
-            expiry: form.expiry || '',
-            status: form.status || 'Активный',
-            note: form.note || ''
-          };
-          if (editingIndex !== null) { const copy=[...students]; copy[editingIndex]=row; setStudents(copy); }
-          else setStudents([...students, row]);
-        }
-        if (modalType === 'archive') {
-          const groupIncome = Number(form.groupIncome||0);
-          const individualIncome = Number(form.individualIncome||0);
-          const passiveIncome = Number(form.passiveIncome||0);
-          const expensesVal = Number(form.expenses||0);
-          const profit = groupIncome + individualIncome + passiveIncome - expensesVal;
-          const row = {
-            month: form.month || '',
-            year: form.year || '',
-            groupIncome, individualIncome, passiveIncome,
-            expenses: expensesVal,
-            profit,
-            note: form.note || ''
-          };
-          if (editingIndex !== null) { const copy=[...monthlyArchive]; copy[editingIndex]=row; setMonthlyArchive(copy); }
-          else setMonthlyArchive([...monthlyArchive, row]);
-        }
-
-        closeModal();
-      };
-
-      const deleteItem = (type, idx) => {
-        if (!confirm('Удалить запись?')) return;
-        if (type === 'dolgo') setDolgo(dolgo.filter((_,i)=>i!==idx));
-        if (type === 'individual') setIndividuals(individuals.filter((_,i)=>i!==idx));
-        if (type === 'rental') setRentals(rentals.filter((_,i)=>i!==idx));
-        if (type === 'expense') setExpenses(expenses.filter((_,i)=>i!==idx));
-        if (type === 'passive') setPassive(passive.filter((_,i)=>i!==idx));
-        if (type === 'student') setStudents(students.filter((_,i)=>i!==idx));
-        if (type === 'archive') setMonthlyArchive(monthlyArchive.filter((_,i)=>i!==idx));
-      };
-
-      const exportCSV = () => {
-        let csv = 'Категория,Доход,Расход,Прибыль\n';
-        monthlyReport.forEach(row=>{
-          csv += `${row.category},${row.income},${row.expense},${row.profit}\n`;
-        });
-        csv += `\nИТОГО,${totalReportIncome},${totalReportExpense},${totalReportProfit}\n`;
-        // create and download
-        const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'thegame_monthly_report.csv'; a.click();
-        URL.revokeObjectURL(url);
-      };
-
-      if (loading) {
-        return <div className="min-h-screen flex items-center justify-center"><div>Загрузка...</div></div>;
-      }
-
-      // UI components (kept inline but organized)
-      return (
-        <div className="min-h-screen p-4">
-          <div className="max-w-6xl mx-auto">
-            <header className="mb-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-2xl font-bold">💰 TheGame — Учёт доходов</h1>
-                  <div className="text-sm text-slate-400">Путь к 1М</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm text-slate-400">Прогресс к цели</div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-56 bg-slate-700 h-4 rounded">
-                      <div className="h-4 rounded bg-gradient-to-r from-blue-500 to-green-400" style={{width: `${Math.min(progressPercent,100)}%`}}></div>
-                    </div>
-                    <div className="text-sm font-bold">{progressPercent}%</div>
-                  </div>
-                  <div className="text-xs text-slate-400"> {fmt(currentTotal)}₽ → {fmt(goal)}₽</div>
-                </div>
-              </div>
-
-              <nav className="mt-4 flex flex-wrap gap-2">
-                {[
-                  {id:'monthlyReport', title:'Месячный отчёт'}, 
-                  {id:'dolgo', title:'Московское долголетие'},
-                  {id:'individuals', title:'Индивидуальные уроки'},
-                  {id:'rentals', title:'Аренда зала'},
-                  {id:'expenses', title:'Расходы'},
-                  {id:'passive', title:'Пассивный'},
-                  {id:'students', title:'База учеников'},
-                  {id:'analytics', title:'Аналитика'},
-                  {id:'archive', title:'По месяцам'},
-                  {id:'summary', title:'Сводка'},
-          {id:'teachersSalary', title:'Зарплаты педагогов'},
-                ].map(t=>(
-                  <button
-                    key={t.id}
-                    onClick={()=>setActiveTab(t.id)}
-                    className={`px-3 py-1 rounded ${activeTab===t.id ? 'bg-blue-600' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
-                  >{t.title}</button>
-                ))}
-              </nav>
-            </header>
-
-            <main className="bg-slate-800 rounded p-4 border border-slate-700">
-              {activeTab === 'monthlyReport' && (
-                <section>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-bold">📅 Месячный отчёт (сводка)</h2>
-                    <div className="flex gap-2">
-                      <button onClick={()=> setActiveTab('summary')} className="px-3 py-2 bg-slate-700 rounded">Перейти в сводку</button>
-                      <button onClick={exportCSV} className="px-3 py-2 bg-green-600 rounded">Экспорт CSV</button>
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-slate-300 border-b border-slate-700">
-                          <th className="py-2 px-2">Категория</th>
-                          <th className="py-2 px-2 text-right">Доход</th>
-                          <th className="py-2 px-2 text-right">Расход</th>
-                          <th className="py-2 px-2 text-right">Прибыль</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {monthlyReport.map((r,i)=>(
-                          <tr key={i} className="border-b border-slate-700/40">
-                            <td className="py-2 px-2">{r.category}</td>
-                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.income)}₽</td>
-                            <td className="py-2 px-2 text-right text-red-400">-{fmt(r.expense)}₽</td>
-                            <td className="py-2 px-2 text-right text-blue-400 font-semibold">{fmt(r.profit)}₽</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-slate-900/50">
-                        <tr className="font-bold">
-                          <td className="py-2 px-2">ИТОГО:</td>
-                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalReportIncome)}₽</td>
-                          <td className="py-2 px-2 text-right text-red-400">-{fmt(totalReportExpense)}₽</td>
-                          <td className="py-2 px-2 text-right text-blue-400">{fmt(totalReportProfit)}₽</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </section>
-              )}
-
-              {activeTab === 'dolgo' && (
-                <section>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-bold">🏃 Московское долголетие</h2>
-                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('dolgo')}>Добавить запись</button>
-                  </div>
-
-                  <div className="overflow-x-auto mb-4">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-700 text-slate-300">
-                          <th className="py-2 px-2">Дата</th>
-                          <th className="py-2 px-2">Локация</th>
-                          <th className="py-2 px-2">Педагог</th>
-                          <th className="py-2 px-2 text-right">Ставка</th>
-                          <th className="py-2 px-2 text-right">Людей</th>
-                          <th className="py-2 px-2 text-right">Доход</th>
-                          <th className="py-2 px-2 text-right">Расход пед.</th>
-                          <th className="py-2 px-2 text-right">Расход за зал</th>
-                          <th className="py-2 px-2 text-right">Прибыль</th>
-                          <th className="py-2 px-2 text-center">Действия</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dolgo.map((r,idx)=>{
-                          const teacherExpense = calcTeacherExpense(Number(r.income||0), r.rate);
-                          const profit = Number(r.income||0) - teacherExpense - Number(r.hallExpense||0);
-                          return (
-                          <tr key={idx} className="border-b border-slate-700/40">
-                            <td className="py-2 px-2">{r.date}</td>
-                            <td className="py-2 px-2">{r.location}</td>
-                            <td className="py-2 px-2">{r.teacher}</td>
-                            <td className="py-2 px-2 text-right">{r.rate}</td>
-                            <td className="py-2 px-2 text-right">{r.people}</td>
-                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.income)}₽</td>
-                            <td className="py-2 px-2 text-right text-red-400">{fmt(teacherExpense)}₽</td>
-                            <td className="py-2 px-2 text-right">{fmt(r.hallExpense)}₽</td>
-                            <td className="py-2 px-2 text-right text-blue-400 font-bold">{fmt(profit)}₽</td>
-                            <td className="py-2 px-2 text-center">
-                              <button onClick={()=>openModal('dolgo', idx)} className="text-blue-400 mr-2">✎</button>
-                              <button onClick={()=>deleteItem('dolgo', idx)} className="text-red-400">🗑</button>
-                            </td>
-                          </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot className="bg-slate-900/50 font-bold">
-                        <tr>
-                          <td colSpan="5" className="py-2 px-2">ИТОГО:</td>
-                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalDolgoIncome)}₽</td>
-                          <td className="py-2 px-2 text-right text-red-400">{fmt(totalDolgoTeacherExpense)}₽</td>
-                          <td className="py-2 px-2 text-right">{fmt(totalDolgoHallExpense)}₽</td>
-                          <td className="py-2 px-2 text-right text-blue-400">{fmt(totalDolgoProfit)}₽</td>
-                          <td></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-
-                  <div className="text-sm text-slate-400">
-                    <div>Примечание: Доход = Людей × 280₽. Ставки педагога: 50% / 700 / 1000 / 100% — можно выбрать или ввести свое значение.</div>
-                    <div className="mt-2">Автозаполнение расхода за зал: Буденного → 0₽, Черкизовская → 0₽ (оплачивают педагоги), Парк → 0₽. Поле можно редактировать вручную.</div>
-                  </div>
-                </section>
-              )}
-
-              {activeTab === 'individuals' && (
-                <section>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-bold">👤 Индивидуальные уроки</h2>
-                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('individual')}>Добавить</button>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-slate-300">
-                        <tr className="border-b border-slate-700">
-                          <th className="py-2 px-2">Дата</th>
-                          <th className="py-2 px-2">Тип</th>
-                          <th className="py-2 px-2">Клиент</th>
-                          <th className="py-2 px-2">Педагог</th>
-                          <th className="py-2 px-2 text-right">Сумма</th>
-                          <th className="py-2 px-2 text-center">Действия</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {individuals.map((r,idx)=>(
-                          <tr key={idx} className="border-b border-slate-700/40">
-                            <td className="py-2 px-2">{r.date}</td>
-                            <td className="py-2 px-2">{r.type}</td>
-                            <td className="py-2 px-2">{r.client}</td>
-                            <td className="py-2 px-2">{r.teacher || '—'}</td>
-                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.amount)}₽</td>
-                            <td className="py-2 px-2 text-center">
-                              <button onClick={()=>openModal('individual', idx)} className="text-blue-400 mr-2">✎</button>
-                              <button onClick={()=>deleteItem('individual', idx)} className="text-red-400">🗑</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-slate-900/50 font-bold">
-                        <tr>
-                          <td colSpan="4" className="py-2 px-2">ИТОГО:</td>
-                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalIndividualIncome)}₽</td>
-                          <td></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </section>
-              )}
-
-              {activeTab === 'rentals' && (
-                <section>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-bold">🏠 Аренда зала</h2>
-                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('rental')}>Добавить аренду</button>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-slate-300">
-                        <tr className="border-b border-slate-700">
-                          <th className="py-2 px-2">Дата</th>
-                          <th className="py-2 px-2">Имя</th>
-                          <th className="py-2 px-2 text-right">Сумма</th>
-                          <th className="py-2 px-2">Комментарий</th>
-                          <th className="py-2 px-2 text-center">Действия</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rentals.map((r,idx)=>(
-                          <tr key={idx} className="border-b border-slate-700/40">
-                            <td className="py-2 px-2">{r.date}</td>
-                            <td className="py-2 px-2">{r.name}</td>
-                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.amount)}₽</td>
-                            <td className="py-2 px-2 text-slate-400">{r.comment}</td>
-                            <td className="py-2 px-2 text-center">
-                              <button onClick={()=>openModal('rental', idx)} className="text-blue-400 mr-2">✎</button>
-                              <button onClick={()=>deleteItem('rental', idx)} className="text-red-400">🗑</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-slate-900/50 font-bold">
-                        <tr>
-                          <td colSpan="2" className="py-2 px-2">ИТОГО:</td>
-                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalRentalsIncome)}₽</td>
-                          <td colSpan="2"></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </section>
-              )}
-
-              {activeTab === 'expenses' && (
-                <section>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-bold">💸 Расходы</h2>
-                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('expense')}>Добавить расход</button>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-slate-300">
-                        <tr className="border-b border-slate-700">
-                          <th className="py-2 px-2">Дата</th>
-                          <th className="py-2 px-2">Тип</th>
-                          <th className="py-2 px-2">Что</th>
-                          <th className="py-2 px-2 text-right">Сумма</th>
-                          <th className="py-2 px-2">Комментарий</th>
-                          <th className="py-2 px-2 text-center">Действия</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {expenses.map((r,idx)=>(
-                          <tr key={idx} className="border-b border-slate-700/40">
-                            <td className="py-2 px-2">{r.date}</td>
-                            <td className="py-2 px-2">{r.type}</td>
-                            <td className="py-2 px-2">{r.what}</td>
-                            <td className="py-2 px-2 text-right text-red-400">-{fmt(r.amount)}₽</td>
-                            <td className="py-2 px-2 text-slate-400">{r.comment}</td>
-                            <td className="py-2 px-2 text-center">
-                              <button onClick={()=>openModal('expense', idx)} className="text-blue-400 mr-2">✎</button>
-                              <button onClick={()=>deleteItem('expense', idx)} className="text-red-400">🗑</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-slate-900/50 font-bold">
-                        <tr>
-                          <td colSpan="3" className="py-2 px-2">ИТОГО:</td>
-                          <td className="py-2 px-2 text-right text-red-400">-{fmt(totalExpenses)}₽</td>
-                          <td colSpan="2"></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </section>
-              )}
-
-              {activeTab === 'passive' && (
-                <section>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-bold">💰 Пассивный доход</h2>
-                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('passive')}>Добавить</button>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-slate-300">
-                        <tr className="border-b border-slate-700">
-                          <th className="py-2 px-2">Дата</th>
-                          <th className="py-2 px-2">Источник</th>
-                          <th className="py-2 px-2 text-right">Сумма/мес</th>
-                          <th className="py-2 px-2">Комментарий</th>
-                          <th className="py-2 px-2 text-center">Действия</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {passive.map((r,idx)=>(
-                          <tr key={idx} className="border-b border-slate-700/40">
-                            <td className="py-2 px-2">{r.date}</td>
-                            <td className="py-2 px-2">{r.source}</td>
-                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.monthly)}₽</td>
-                            <td className="py-2 px-2 text-slate-400">{r.comment}</td>
-                            <td className="py-2 px-2 text-center">
-                              <button onClick={()=>openModal('passive', idx)} className="text-blue-400 mr-2">✎</button>
-                              <button onClick={()=>deleteItem('passive', idx)} className="text-red-400">🗑</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-slate-900/50 font-bold">
-                        <tr>
-                          <td colSpan="2" className="py-2 px-2">ИТОГО:</td>
-                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalPassiveIncome)}₽</td>
-                          <td colSpan="2"></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </section>
-              )}
-
-              {activeTab === 'students' && (
-                <section>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-bold">👥 База учеников</h2>
-                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('student')}>Добавить ученика</button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div className="bg-slate-900 p-3 rounded">
-                      <div className="text-slate-400 text-sm">Всего учеников</div>
-                      <div className="text-2xl font-bold text-blue-400">{totalStudents}</div>
-                    </div>
-                    <div className="bg-slate-900 p-3 rounded">
-                      <div className="text-slate-400 text-sm">Активных</div>
-                      <div className="text-2xl font-bold text-green-400">{activeStudents}</div>
-                    </div>
-                    <div className="bg-slate-900 p-3 rounded">
-                      <div className="text-slate-400 text-sm">Средний доход</div>
-                      <div className="text-2xl font-bold text-yellow-400">{fmt(avgIncomePerStudent)}₽</div>
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-slate-300">
-                        <tr className="border-b border-slate-700">
-                          <th className="py-2 px-2">Имя</th>
-                          <th className="py-2 px-2">Телефон</th>
-                          <th className="py-2 px-2">Группа</th>
-                          <th className="py-2 px-2">Абонемент</th>
-                          <th className="py-2 px-2">Действует до</th>
-                          <th className="py-2 px-2">Статус</th>
-                          <th className="py-2 px-2 text-center">Действия</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {students.map((s,idx)=>(
-                          <tr key={idx} className="border-b border-slate-700/40">
-                            <td className="py-2 px-2">{s.name}</td>
-                            <td className="py-2 px-2">{s.phone}</td>
-                            <td className="py-2 px-2">{s.group}</td>
-                            <td className="py-2 px-2">{s.subscription}</td>
-                            <td className="py-2 px-2">{s.expiry}</td>
-                            <td className="py-2 px-2">{s.status}</td>
-                            <td className="py-2 px-2 text-center">
-                              <button onClick={()=>openModal('student', idx)} className="text-blue-400 mr-2">✎</button>
-                              <button onClick={()=>deleteItem('student', idx)} className="text-red-400">🗑</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-              )}
-
-              {activeTab === 'analytics' && (
-                <section>
-                  <h2 className="text-lg font-bold mb-4">📊 Аналитика</h2>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-slate-900 p-4 rounded">
-                      <h3 className="text-sm text-green-400 font-bold mb-2">Финансы</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between"><span>Текущий доход (месяц):</span><b>{fmt(totalReportIncome)}₽</b></div>
-                        <div className="flex justify-between"><span>Чистая прибыль:</span><b className="text-blue-400">{fmt(totalReportProfit)}₽</b></div>
-                        <div className="flex justify-between"><span>Рентабельность:</span><b>{ totalReportIncome ? Math.round((totalReportProfit/totalReportIncome)*100) : 0 }%</b></div>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-900 p-4 rounded">
-                      <h3 className="text-sm text-blue-400 font-bold mb-2">Ученики</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between"><span>Всего учеников:</span><b>{totalStudents}</b></div>
-                        <div className="flex justify-between"><span>Активных:</span><b className="text-green-400">{activeStudents}</b></div>
-                        <div className="flex justify-between"><span>Средний доход с ученика:</span><b className="text-yellow-400">{fmt(avgIncomePerStudent)}₽</b></div>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-900 p-4 rounded">
-                      <h3 className="text-sm text-purple-400 font-bold mb-2">Цели</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between"><span>Текущий:</span><b>{fmt(currentTotal)}₽</b></div>
-                        <div className="flex justify-between"><span>Цель:</span><b>{fmt(goal)}₽</b></div>
-                        <div className="flex justify-between"><span>Осталось:</span><b className="text-red-400">{fmt(Math.max(goal - currentTotal,0))}₽</b></div>
-                        <div className="flex justify-between"><span>Прогресс:</span><b className="text-blue-400">{progressPercent}%</b></div>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-900 p-4 rounded">
-                      <h3 className="text-sm text-orange-400 font-bold mb-2">Рост</h3>
-                      <div className="text-xs text-slate-400">
-                        • Нужно увеличить доход на ~{fmt(Math.round((goal - currentTotal)/12))}₽/мес<br/>
-                        • Или привлечь ~{Math.round((goal - currentTotal) / (avgIncomePerStudent || 3000))} учеников (примерно)
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-6">
-                    <h3 className="text-md font-bold mb-2">🆕 ТОП педагогов/клубов (по прибыли)</h3>
-                    {topWithShare.length === 0 ? <div className="text-slate-400">Нет данных</div> : (
-                      <div className="bg-slate-900 p-3 rounded">
-                        {topWithShare.map((t, i)=>(
-                          <div key={i} className="flex items-center gap-3 mb-2">
-                            <div className="w-8 text-slate-300">{i+1}.</div>
-                            <div className="flex-1">
-                              <div className="font-semibold">{t.name}</div>
-                              <div className="text-xs text-slate-400">{fmt(t.profit)}₽ — {t.share}%</div>
-                              <div className="w-full bg-slate-700 h-2 rounded mt-1">
-                                <div style={{width:`${t.share}%`}} className="h-2 bg-gradient-to-r from-blue-500 to-green-400 rounded"></div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="mt-4 text-sm text-slate-400">Вывод: фокус на направлениях с наибольшей долей прибыли.</div>
-                  </div>
-                </section>
-              )}
-
-              {activeTab === 'archive' && (
-                <section>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-bold">📆 По месяцам (архив)</h2>
-                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('archive')}>Добавить месяц</button>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-slate-300">
-                        <tr className="border-b border-slate-700">
-                          <th className="py-2 px-2">Месяц</th>
-                          <th className="py-2 px-2 text-right">Долголетие</th>
-                          <th className="py-2 px-2 text-right">Индивид.</th>
-                          <th className="py-2 px-2 text-right">Пассивный</th>
-                          <th className="py-2 px-2 text-right">Расходы</th>
-                          <th className="py-2 px-2 text-right">Прибыль</th>
-                          <th className="py-2 px-2 text-center">Действия</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {monthlyArchive.map((r,idx)=>(
-                          <tr key={idx} className="border-b border-slate-700/40">
-                            <td className="py-2 px-2">{r.month} {r.year}</td>
-                            <td className="py-2 px-2 text-right">{fmt(r.groupIncome)}₽</td>
-                            <td className="py-2 px-2 text-right">{fmt(r.individualIncome)}₽</td>
-                            <td className="py-2 px-2 text-right">{fmt(r.passiveIncome)}₽</td>
-                            <td className="py-2 px-2 text-right">-{fmt(r.expenses)}₽</td>
-                            <td className="py-2 px-2 text-right text-blue-400 font-bold">{fmt(r.profit)}₽</td>
-                            <td className="py-2 px-2 text-center">
-                              <button onClick={()=>openModal('archive', idx)} className="text-blue-400 mr-2">✎</button>
-                              <button onClick={()=>deleteItem('archive', idx)} className="text-red-400">🗑</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-slate-900/50 font-bold">
-                        <tr>
-                          <td className="py-2 px-2">ИТОГО:</td>
-                          <td className="py-2 px-2 text-right">{fmt(monthlyArchive.reduce((s,r)=>s+(r.groupIncome||0),0))}₽</td>
-                          <td className="py-2 px-2 text-right">{fmt(monthlyArchive.reduce((s,r)=>s+(r.individualIncome||0),0))}₽</td>
-                          <td className="py-2 px-2 text-right">{fmt(monthlyArchive.reduce((s,r)=>s+(r.passiveIncome||0),0))}₽</td>
-                          <td className="py-2 px-2 text-right">-{fmt(monthlyArchive.reduce((s,r)=>s+(r.expenses||0),0))}₽</td>
-                          <td className="py-2 px-2 text-right">{fmt(monthlyArchive.reduce((s,r)=>s+(r.profit||0),0))}₽</td>
-                          <td></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </section>
-              )}
-
-              {activeTab === 'summary' && (
-                <section>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-bold">📈 Сводка (текущее состояние)</h2>
-                    <button onClick={exportCSV} className="px-3 py-2 bg-green-600 rounded">Экспорт CSV</button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-slate-900 p-4 rounded">
-                      <div className="flex justify-between"><span>Долголетие (прибыль):</span><b>{fmt(totalDolgoProfit)}₽</b></div>
-                      <div className="flex justify-between"><span>Индивидуалки:</span><b>{fmt(totalIndividualIncome)}₽</b></div>
-                      <div className="flex justify-between"><span>Аренда зала:</span><b>{fmt(totalRentalsIncome)}₽</b></div>
-                      <div className="flex justify-between"><span>Пассивный доход:</span><b>{fmt(totalPassiveIncome)}₽</b></div>
-                      <div className="flex justify-between mt-2"><span>Расходы:</span><b className="text-red-400">-{fmt(totalExpenses)}₽</b></div>
-                      <div className="flex justify-between mt-4 text-xl font-bold"><span>ЧИСТАЯ ПРИБЫЛЬ:</span><b className="text-blue-400">{fmt(totalReportProfit)}₽</b></div>
-                    </div>
-
-                    <div className="bg-slate-900 p-4 rounded">
-                      <div className="text-slate-400 text-sm mb-2">Краткая сводка</div>
-                      <div className="text-sm">Всего доходов: {fmt(totalReportIncome)}₽</div>
-                      <div className="text-sm">Всего расходов: {fmt(totalReportExpense)}₽</div>
-                      <div className="text-sm">Прибыль: {fmt(totalReportProfit)}₽</div>
-                      <div className="mt-4">
-                        <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>alert('Функция экспорта в разработке (CSV по сводке уже доступен)')}>Экспорт отчёта</button>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              )}
-{activeTab === 'teachersSalary' && (
-  <section>
-    <h2 className="text-lg font-bold mb-2">💼 Зарплаты педагогов</h2>
-    <div className="text-slate-400 mb-4">
-      Детальный отчёт по работе и вознаграждениям
-    </div>
-
-    {/* Статистика */}
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-      <div className="bg-blue-900 p-4 rounded">
-        <div className="text-xs uppercase opacity-80">Педагогов работает</div>
-        <div className="text-2xl font-bold">3</div>
-      </div>
-      <div className="bg-green-800 p-4 rounded">
-        <div className="text-xs uppercase opacity-80">Всего занятий</div>
-        <div className="text-2xl font-bold">7</div>
-      </div>
-      <div className="bg-yellow-800 p-4 rounded">
-        <div className="text-xs uppercase opacity-80">Выплачено зарплат</div>
-        <div className="text-2xl font-bold">7 910₽</div>
-      </div>
-      <div className="bg-red-800 p-4 rounded">
-        <div className="text-xs uppercase opacity-80">Расходы на залы</div>
-        <div className="text-2xl font-bold">0₽</div>
-      </div>
-    </div>
-
-    {/* Таблица */}
-    <div className="overflow-x-auto bg-slate-900 p-4 rounded">
-      <table className="w-full text-sm">
-        <thead className="text-slate-300 border-b border-slate-700">
-          <tr>
-            <th>Педагог</th>
-            <th className="text-center">Дней</th>
-            <th className="text-center">Занятий</th>
-            <th className="text-right">Доход</th>
-            <th className="text-right">Зарплата</th>
-            <th className="text-right">Зал</th>
-            <th className="text-right">Прибыль</th>
-            <th className="text-center">%</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr className="border-b border-slate-700/40">
-            <td>
-              <b>Иванова Мария</b>
-              <div className="text-xs text-slate-400">📍 Буденного</div>
-            </td>
-            <td className="text-center">3</td>
-            <td className="text-center">3</td>
-            <td className="text-right text-green-400">13 720₽</td>
-            <td className="text-right text-yellow-400">6 860₽</td>
-            <td className="text-right text-red-400">0₽</td>
-            <td className="text-right text-blue-400 font-bold">6 860₽</td>
-            <td className="text-center">50%</td>
-          </tr>
-
-          <tr className="border-b border-slate-700/40">
-            <td>
-              <b>Сидорова Анна</b>
-              <div className="text-xs text-slate-400">📍 Черкизовская</div>
-            </td>
-            <td className="text-center">2</td>
-            <td className="text-center">2</td>
-            <td className="text-right text-green-400">11 760₽</td>
-            <td className="text-right text-yellow-400">2 000₽</td>
-            <td className="text-right text-red-400">0₽</td>
-            <td className="text-right text-blue-400 font-bold">9 760₽</td>
-            <td className="text-center">83%</td>
-          </tr>
-
-          <tr>
-            <td>
-              <b>Петров Сергей</b>
-              <div className="text-xs text-slate-400">📍 Парк</div>
-            </td>
-            <td className="text-center">2</td>
-            <td className="text-center">2</td>
-            <td className="text-right text-green-400">7 280₽</td>
-            <td className="text-right text-yellow-400">1 400₽</td>
-            <td className="text-right text-red-400">0₽</td>
-            <td className="text-right text-blue-400 font-bold">5 880₽</td>
-            <td className="text-center">81%</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div className="mt-4 text-sm text-slate-400">
-      ⚠️ Сейчас показаны демонстрационные данные.  
-      В следующем шаге можно связать вкладку напрямую с «Московским долголетием».
-    </div>
-  </section>
-)}
-            </main>
-
-            {/* Modal */}
-            {showModal && (
-              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={closeModal}>
-                <div className="bg-slate-800 rounded p-4 w-full max-w-2xl" onClick={(e)=>e.stopPropagation()}>
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-bold">{editingIndex!==null ? 'Редактировать' : 'Добавить'} — {modalType}</h3>
-                    <button onClick={closeModal} className="text-slate-400">✖</button>
-                  </div>
-
-                  <div className="space-y-2 max-h-[60vh] overflow-y-auto pb-2">
-                    {/* doloГo modal */}
-                    {modalType === 'dolgo' && (
-                      <>
-                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form, date:e.target.value})} placeholder="например: 06.12" /></div>
-
-                        <div>
-                          <label className="text-sm">Локация</label>
-                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.location||''} onChange={(e)=>{
-                            const loc = e.target.value;
-                            const defaultHall = locationDefaults[loc] ?? 0;
-                            setForm({...form, location: loc, hallExpense: defaultHall});
-                          }}>
-                            <option value="">Выберите локацию</option>
-                            <option value="Буденного">Буденного</option>
-                            <option value="Черкизовская">Черкизовская</option>
-                            <option value="Парк">Парк</option>
-                          </select>
-                        </div>
-
-                        <div><label className="text-sm">Педагог</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.teacher||''} onChange={(e)=>setForm({...form, teacher:e.target.value})} /></div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-sm">Ставка педагога</label>
-                            <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.rate||'50%'} onChange={(e)=>setForm({...form, rate:e.target.value})}>
-                              <option value="50%">50%</option>
-                              <option value="700">700₽</option>
-                              <option value="1000">1000₽</option>
-                              <option value="100%">100%</option>
-                              <option value="custom">Другое...</option>
-                            </select>
-                            {form.rate === 'custom' && <input className="mt-2 w-full p-2 bg-slate-700 rounded" placeholder="Введите сумму или процент (пример: 800 или 40%)" value={form.customRate||''} onChange={(e)=>setForm({...form, customRate:e.target.value})} />}
-                          </div>
-
-                          <div>
-                            <label className="text-sm">Количество людей</label>
-                            <input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.people||''} onChange={(e)=> {
-                              const people = e.target.value;
-                              const income = Number(people || 0) * 280;
-                              let rateVal = form.rate;
-                              if (rateVal === 'custom' && form.customRate) rateVal = form.customRate;
-                              setForm({...form, people, income});
-                            }} />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-sm">Расход за зал (₽)</label>
-                          <input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.hallExpense||0} onChange={(e)=>setForm({...form, hallExpense: Number(e.target.value)})} />
-                        </div>
-
-                        <div>
-                          <label className="text-sm">Комментарий</label>
-                          <input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form, comment:e.target.value})} />
-                        </div>
-                        <div className="text-sm text-slate-400">Доход автоматически = Людей × 280₽ (после заполнения людей появится сумма в предварительном расчёте).</div>
-                      </>
-                    )}
-
-                    {/* individual */}
-                    {modalType === 'individual' && (
-                      <>
-                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
-                        <div><label className="text-sm">Тип услуги</label>
-                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.type||'Остальные'} onChange={(e)=>setForm({...form,type:e.target.value})}>
-                            <option>Азбука танца</option>
-                            <option>Латинский квартет</option>
-                            <option>Проам</option>
-                            <option>Постановка</option>
-                            <option>Тренировка</option>
-                            <option>Остальные</option>
-                          </select>
-                        </div>
-                        <div><label className="text-sm">Имя клиента</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.client||''} onChange={(e)=>setForm({...form,client:e.target.value})} /></div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div><label className="text-sm">Сумма (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.amount||''} onChange={(e)=>setForm({...form,amount: Number(e.target.value)})} /></div>
-                          <div><label className="text-sm">Педагог (опционально)</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.teacher||''} onChange={(e)=>setForm({...form,teacher:e.target.value})} /></div>
-                        </div>
-                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
-                      </>
-                    )}
-
-                    {/* rental */}
-                    {modalType === 'rental' && (
-                      <>
-                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
-                        <div><label className="text-sm">Имя (арендатор)</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.name||''} onChange={(e)=>setForm({...form,name:e.target.value})} /></div>
-                        <div><label className="text-sm">Сумма (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.amount||''} onChange={(e)=>setForm({...form,amount: Number(e.target.value)})} /></div>
-                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
-                      </>
-                    )}
-
-                    {/* expense */}
-                    {modalType === 'expense' && (
-                      <>
-                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
-                        <div><label className="text-sm">Тип расхода</label>
-                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.type||''} onChange={(e)=>setForm({...form,type:e.target.value})}>
-                            <option>Аренда зала</option>
-                            <option>Постоянные расходы</option>
-                            <option>Увлечения</option>
-                            <option>Прочее</option>
-                          </select>
-                        </div>
-                        <div><label className="text-sm">Что</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.what||''} onChange={(e)=>setForm({...form,what:e.target.value})} /></div>
-                        <div><label className="text-sm">Сумма (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.amount||''} onChange={(e)=>setForm({...form,amount: Number(e.target.value)})} /></div>
-                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
-                      </>
-                    )}
-
-                    {/* passive */}
-                    {modalType === 'passive' && (
-                      <>
-                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
-                        <div><label className="text-sm">Источник</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.source||''} onChange={(e)=>setForm({...form,source:e.target.value})} /></div>
-                        <div><label className="text-sm">Сумма в месяц (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.monthly||''} onChange={(e)=>setForm({...form,monthly: Number(e.target.value)})} /></div>
-                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
-                      </>
-                    )}
-
-                    {/* student */}
-                    {modalType === 'student' && (
-                      <>
-                        <div><label className="text-sm">Имя и фамилия</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.name||''} onChange={(e)=>setForm({...form,name:e.target.value})} /></div>
-                        <div><label className="text-sm">Телефон</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.phone||''} onChange={(e)=>setForm({...form,phone:e.target.value})} /></div>
-                        <div><label className="text-sm">Группа</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.group||''} onChange={(e)=>setForm({...form,group:e.target.value})} placeholder="Пример: Долголетие Буденного" /></div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div><label className="text-sm">Абонемент</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.subscription||''} onChange={(e)=>setForm({...form,subscription:e.target.value})} /></div>
-                          <div><label className="text-sm">Действует до</label><input type="date" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.expiry||''} onChange={(e)=>setForm({...form,expiry:e.target.value})} /></div>
-                        </div>
-                        <div><label className="text-sm">Статус</label>
-                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.status||'Активный'} onChange={(e)=>setForm({...form,status:e.target.value})}>
-                            <option>Активный</option>
-                            <option>Неактивный</option>
-                            <option>Пробный</option>
-                          </select>
-                        </div>
-                        <div><label className="text-sm">Примечание</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.note||''} onChange={(e)=>setForm({...form,note:e.target.value})} /></div>
-                      </>
-                    )}
-
-                    {/* archive modal */}
-                    {modalType === 'archive' && (
-                      <>
-                        <div><label className="text-sm">Месяц</label>
-                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.month||''} onChange={(e)=>setForm({...form,month:e.target.value})}>
-                            <option>Январь</option><option>Февраль</option><option>Март</option><option>Апрель</option>
-                            <option>Май</option><option>Июнь</option><option>Июль</option><option>Август</option>
-                            <option>Сентябрь</option><option>Октябрь</option><option>Ноябрь</option><option>Декабрь</option>
-                          </select>
-                        </div>
-                        <div><label className="text-sm">Год</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.year||''} onChange={(e)=>setForm({...form,year:e.target.value})} /></div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div><label className="text-sm">Долголетие (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.groupIncome||''} onChange={(e)=>setForm({...form,groupIncome: Number(e.target.value)})} /></div>
-                          <div><label className="text-sm">Индивидуальные (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.individualIncome||''} onChange={(e)=>setForm({...form,individualIncome: Number(e.target.value)})} /></div>
-                          <div><label className="text-sm">Пассивный (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.passiveIncome||''} onChange={(e)=>setForm({...form,passiveIncome: Number(e.target.value)})} /></div>
-                          <div><label className="text-sm">Расходы (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.expenses||''} onChange={(e)=>setForm({...form,expenses: Number(e.target.value)})} /></div>
-                        </div>
-                        <div><label className="text-sm">Примечание</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.note||''} onChange={(e)=>setForm({...form,note:e.target.value})} /></div>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="flex gap-2 mt-3">
-                    <button onClick={saveModal} className="px-4 py-2 bg-blue-600 rounded">Сохранить</button>
-                    <button onClick={closeModal} className="px-4 py-2 bg-slate-700 rounded">Отмена</button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-          </div>
-        </div>
-      );
-    }
-
-    ReactDOM.render(<App />, document.getElementById('root'));
-  </script>
+<body>
+<div class="container">
+
+<h1>💼 Зарплаты педагогов</h1>
+<div class="subtitle">
+Программа «Московское долголетие» — автоматизированный учёт
+</div>
+
+<div class="buttons">
+<button class="btn-green">📤 Загрузить DOCX</button>
+<button class="btn-blue">📅 Расписание</button>
+</div>
+
+<div class="cards">
+<div class="card blue">Педагогов активных<span>3</span></div>
+<div class="card purple">Всего занятий<span>7</span></div>
+<div class="card green">Грант<span>1 960 ₽</span></div>
+<div class="card orange">Зарплаты<span>7 910 ₽</span></div>
+</div>
+
+<div class="table">
+<h2>📊 Детализация по педагогам</h2>
+<table>
+<tr>
+<th>Педагог</th>
+<th>Занятий</th>
+<th>Людей</th>
+<th>Зарплата</th>
+</tr>
+<tr>
+<td>Иванова</td>
+<td>3</td>
+<td>13</td>
+<td>3 390 ₽</td>
+</tr>
+<tr>
+<td>Петрова</td>
+<td>2</td>
+<td>8</td>
+<td>2 080 ₽</td>
+</tr>
+<tr>
+<td>Сидорова</td>
+<td>2</td>
+<td>6</td>
+<td>2 440 ₽</td>
+</tr>
+</table>
+</div>
+
+<div class="help">
+💡 <b>Как работать с системой</b>
+<ol>
+<li>Настройте расписание занятий</li>
+<li>Привяжите группы к дням</li>
+<li>Загрузите отчёт DOCX</li>
+<li>Занятия и зарплаты рассчитаются автоматически</li>
+</ol>
+</div>
+
+</div>
 </body>
 </html>
