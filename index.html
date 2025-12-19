@@ -1,1143 +1,1222 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Зарплаты педагогов - Московское долголетие</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-      background: #0f172a; 
-      color: #fff; 
-      padding: 10px;
-    }
-    .container { max-width: 1400px; margin: 0 auto; }
-    
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-    .header-left h1 { font-size: 24px; margin-bottom: 5px; }
-    .subtitle { color: #94a3b8; font-size: 13px; }
-    
-    .controls {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .btn {
-      background: #1e40af;
-      color: #fff;
-      border: none;
-      padding: 10px 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      transition: all 0.2s;
-    }
-    .btn:hover { background: #1e3a8a; }
-    .btn.secondary { background: #334155; }
-    .btn.secondary:hover { background: #475569; }
-    .btn.success { background: #059669; }
-    .btn.success:hover { background: #047857; }
-    .btn.small { padding: 6px 10px; font-size: 12px; }
-    
-    .stats { 
-      display: grid; 
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
-      gap: 10px; 
-      margin-bottom: 20px; 
-    }
-    .stat-card {
-      background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-      padding: 15px;
-      border-radius: 10px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    }
-    .stat-card.green { background: linear-gradient(135deg, #065f46 0%, #047857 100%); }
-    .stat-card.yellow { background: linear-gradient(135deg, #78350f 0%, #92400e 100%); }
-    .stat-card.red { background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%); }
-    .stat-card.purple { background: linear-gradient(135deg, #581c87 0%, #6b21a8 100%); }
-    
-    .stat-label { 
-      font-size: 10px; 
-      text-transform: uppercase; 
-      letter-spacing: 0.5px; 
-      opacity: 0.8;
-      margin-bottom: 5px;
-    }
-    .stat-value { font-size: 24px; font-weight: bold; }
-    .stat-change { font-size: 11px; margin-top: 5px; opacity: 0.9; }
-    
-    .table-container {
-      background: #1e293b;
-      border-radius: 10px;
-      padding: 15px;
-      margin-bottom: 15px;
-      overflow-x: auto;
-    }
-    
-    table { 
-      width: 100%; 
-      border-collapse: collapse;
-      min-width: 600px;
-    }
-    th { 
-      padding: 10px 6px; 
-      text-align: left; 
-      color: #cbd5e1; 
-      font-size: 12px;
-      border-bottom: 2px solid #334155;
-    }
-    td { 
-      padding: 12px 6px; 
-      border-bottom: 1px solid #334155;
-      font-size: 13px;
-    }
-    
-    .badge {
-      display: inline-block;
-      background: #2563eb;
-      color: #fff;
-      padding: 4px 10px;
-      border-radius: 15px;
-      font-weight: bold;
-      font-size: 12px;
-    }
-    
-    .amount { font-weight: bold; font-size: 14px; }
-    .green { color: #4ade80; }
-    .yellow { color: #fbbf24; }
-    .red { color: #f87171; }
-    .blue { color: #60a5fa; }
-    
-    .modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.85);
-      z-index: 1000;
-      overflow-y: auto;
-      padding: 10px;
-    }
-    .modal.active { display: block; }
-    .modal-content {
-      background: #1e293b;
-      border-radius: 12px;
-      padding: 20px;
-      max-width: 800px;
-      width: 100%;
-      margin: 20px auto;
-      max-height: calc(100vh - 40px);
-      overflow-y: auto;
-    }
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 15px;
-    }
-    .modal-title { font-size: 18px; font-weight: bold; }
-    .close-btn {
-      background: none;
-      border: none;
-      color: #94a3b8;
-      font-size: 28px;
-      cursor: pointer;
-      padding: 0;
-      width: 30px;
-      height: 30px;
-      line-height: 1;
-    }
-    
-    .form-group {
-      margin-bottom: 12px;
-    }
-    .form-group label {
-      display: block;
-      color: #cbd5e1;
-      font-size: 13px;
-      margin-bottom: 5px;
-      font-weight: 500;
-    }
-    .form-group input,
-    .form-group select {
-      width: 100%;
-      background: #334155;
-      border: 1px solid #475569;
-      color: #fff;
-      padding: 10px;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-    .form-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 15px;
-      justify-content: flex-end;
-    }
-    
-    .alert {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      background: #1e293b;
-      border-left: 4px solid #22c55e;
-      padding: 12px 16px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-      z-index: 2000;
-      max-width: 90%;
-      font-size: 13px;
-    }
-    .alert.error { border-left-color: #ef4444; }
-    
-    .info-box {
-      background: rgba(59, 130, 246, 0.1);
-      border-left: 4px solid #3b82f6;
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 15px;
-    }
-    .info-title { 
-      font-weight: bold; 
-      color: #93c5fd; 
-      margin-bottom: 10px;
-      font-size: 14px;
-    }
-    
-    .preview-section {
-      background: #334155;
-      padding: 12px;
-      border-radius: 8px;
-      margin-bottom: 12px;
-    }
-    .preview-title {
-      color: #93c5fd;
-      font-weight: bold;
-      margin-bottom: 8px;
-      font-size: 13px;
-    }
-    .preview-item {
-      padding: 6px 0;
-      border-bottom: 1px solid #475569;
-      font-size: 13px;
-    }
-    .preview-item:last-child { border-bottom: none; }
-    
-    .group-card {
-      background: #334155;
-      padding: 12px;
-      border-radius: 8px;
-      margin-bottom: 8px;
-    }
-    .group-card h3 {
-      font-size: 14px;
-      margin-bottom: 5px;
-    }
-    .group-card p {
-      color: #94a3b8;
-      font-size: 12px;
-      margin-bottom: 8px;
-    }
-    
-    .calendar-grid {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 2px;
-      margin-top: 10px;
-    }
-    .calendar-day {
-      background: #334155;
-      padding: 6px;
-      border-radius: 4px;
-      text-align: center;
-      cursor: pointer;
-      min-height: 60px;
-      font-size: 11px;
-    }
-    .calendar-day:hover { background: #475569; }
-    .calendar-day.has-schedule {
-      background: rgba(59, 130, 246, 0.3);
-      border: 2px solid #3b82f6;
-    }
-    .calendar-day-number {
-      font-weight: bold;
-      font-size: 14px;
-      margin-bottom: 4px;
-    }
-    .calendar-class {
-      font-size: 9px;
-      background: rgba(59, 130, 246, 0.5);
-      padding: 2px;
-      border-radius: 2px;
-      margin-top: 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    
-    .upload-zone {
-      border: 2px dashed #475569;
-      border-radius: 10px;
-      padding: 30px;
-      text-align: center;
-      background: rgba(59, 130, 246, 0.05);
-      cursor: pointer;
-    }
-    .upload-icon { font-size: 40px; margin-bottom: 10px; }
-    .upload-text { color: #cbd5e1; font-size: 14px; margin-bottom: 5px; }
-    .upload-hint { color: #94a3b8; font-size: 12px; }
-    
-    .text-center { text-align: center; }
-    .text-right { text-align: right; }
-    
-    @media (max-width: 768px) {
-      .header-left h1 { font-size: 20px; }
-      .controls { width: 100%; }
-      .btn { width: 100%; }
-      .stats { grid-template-columns: repeat(2, 1fr); }
-      .stat-value { font-size: 20px; }
-      table { font-size: 11px; }
-      th, td { padding: 8px 4px; }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div class="header-left">
-        <h1>💼 Зарплаты педагогов</h1>
-        <div class="subtitle">Московское долголетие</div>
-      </div>
-      <div class="controls">
-        <button class="btn success" onclick="showUploadModal()">📤 Загрузить DOCX</button>
-        <button class="btn" onclick="showCalendarModal()">📅 Календарь</button>
-        <button class="btn" onclick="showGroupsModal()">📋 Группы</button>
-        <button class="btn secondary" onclick="showAddExpenseModal()">💸 Расход</button>
-      </div>
-    </div>
-    
-    <div class="stats" id="statsContainer"></div>
-    
-    <div class="table-container">
-      <h2 style="margin-bottom: 15px; font-size: 16px;">📊 По педагогам</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Педагог</th>
-            <th class="text-center">Занятий</th>
-            <th class="text-center">Людей</th>
-            <th class="text-right">Грант</th>
-            <th class="text-right">Зарплата</th>
-            <th class="text-right">Аренда</th>
-            <th class="text-right">Прибыль</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-        <tfoot style="background: #0f172a; font-weight: bold;" id="tableFoot"></tfoot>
-      </table>
-    </div>
-  </div>
-  
-  <!-- Modals -->
-  <div class="modal" id="uploadModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <div class="modal-title">📤 Загрузка отчета</div>
-        <button class="close-btn" onclick="closeModal('uploadModal')">×</button>
-      </div>
-      <div id="uploadContent">
-        <div class="upload-zone" onclick="document.getElementById('docxFile').click()">
-          <div class="upload-icon">📄</div>
-          <div class="upload-text">Выберите файл DOCX</div>
-          <div class="upload-hint">Отчет посещаемости</div>
-        </div>
-        <input type="file" id="docxFile" accept=".docx" style="display: none;" onchange="handleFileUpload(event)">
-      </div>
-    </div>
-  </div>
-  
-  <div class="modal" id="calendarModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <div class="modal-title">📅 Календарь</div>
-        <button class="close-btn" onclick="closeModal('calendarModal')">×</button>
-      </div>
-      <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
-        <button class="btn secondary small" onclick="changeMonth(-1)">←</button>
-        <div style="font-weight: bold;" id="currentMonth"></div>
-        <button class="btn secondary small" onclick="changeMonth(1)">→</button>
-      </div>
-      <div id="calendarContent"></div>
-    </div>
-  </div>
-  
-  <div class="modal" id="addToCalendarModal">
-    <div class="modal-content" style="max-width: 400px;">
-      <div class="modal-header">
-        <div class="modal-title" id="calTitle">Добавить</div>
-        <button class="close-btn" onclick="closeModal('addToCalendarModal')">×</button>
-      </div>
-      <form onsubmit="saveToCalendar(event)">
-        <input type="hidden" id="calDate">
-        <div class="form-group">
-          <label>Группа</label>
-          <select id="calGroup" required></select>
-        </div>
-        <div class="form-group">
-          <label>Время</label>
-          <input type="time" id="calTime" value="09:00">
-        </div>
-        <div class="form-actions">
-          <button type="button" class="btn secondary" onclick="closeModal('addToCalendarModal')">Отмена</button>
-          <button type="submit" class="btn">Сохранить</button>
-        </div>
-      </form>
-    </div>
-  </div>
-  
-  <div class="modal" id="groupsModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <div class="modal-title">📋 Группы</div>
-        <button class="close-btn" onclick="closeModal('groupsModal')">×</button>
-      </div>
-      <button class="btn success" onclick="showAddGroupForm()" style="margin-bottom: 15px; width: 100%;">➕ Добавить группу</button>
-      <div id="groupsList"></div>
-    </div>
-  </div>
-  
-  <div class="modal" id="groupFormModal">
-    <div class="modal-content" style="max-width: 500px;">
-      <div class="modal-header">
-        <div class="modal-title" id="groupFormTitle">Группа</div>
-        <button class="close-btn" onclick="closeModal('groupFormModal')">×</button>
-      </div>
-      <form onsubmit="saveGroup(event)">
-        <input type="hidden" id="editGroupId">
-        <div class="form-group">
-          <label>Код группы *</label>
-          <input type="text" id="groupCode" placeholder="G-02250378" required>
-        </div>
-        <div class="form-group">
-          <label>Название *</label>
-          <input type="text" id="groupName" placeholder="Танцы" required>
-        </div>
-        <div class="form-group">
-          <label>Педагог *</label>
-          <input type="text" id="groupTeacher" placeholder="Екатерина Иванова" required>
-        </div>
-        <div class="form-group">
-          <label>Локация *</label>
-          <select id="groupLocation" required>
-            <option value="Буденного">Буденного</option>
-            <option value="Черкизовская">Черкизовская</option>
-            <option value="Парк">Парк</option>
-            <option value="Другое">Другое</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Тип оплаты *</label>
-          <select id="groupSalaryType" onchange="toggleSalaryLabel()">
-            <option value="percent">Процент %</option>
-            <option value="fixed">Фикс ставка</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label id="groupSalaryLabel">Процент (%) *</label>
-          <input type="number" id="groupSalaryValue" min="0" step="0.01" required>
-        </div>
-        <div class="form-group">
-          <label>Аренда зала (₽)</label>
-          <input type="number" id="groupHallCost" min="0" value="0">
-        </div>
-        <div class="form-actions">
-          <button type="button" class="btn secondary" onclick="closeModal('groupFormModal')">Отмена</button>
-          <button type="submit" class="btn">Сохранить</button>
-        </div>
-      </form>
-    </div>
-  </div>
-  
-  <div class="modal" id="expenseModal">
-    <div class="modal-content" style="max-width: 400px;">
-      <div class="modal-header">
-        <div class="modal-title">💸 Добавить расход</div>
-        <button class="close-btn" onclick="closeModal('expenseModal')">×</button>
-      </div>
-      <form onsubmit="saveExpense(event)">
-        <div class="form-group">
-          <label>Дата</label>
-          <input type="date" id="expenseDate" required>
-        </div>
-        <div class="form-group">
-          <label>Группа</label>
-          <select id="expenseGroup" required></select>
-        </div>
-        <div class="form-group">
-          <label>Сумма (₽)</label>
-          <input type="number" id="expenseAmount" min="0" required>
-        </div>
-        <div class="form-group">
-          <label>Причина</label>
-          <input type="text" id="expenseReason" placeholder="Аренда оплачена, занятие отменено">
-        </div>
-        <div class="form-actions">
-          <button type="button" class="btn secondary" onclick="closeModal('expenseModal')">Отмена</button>
-          <button type="submit" class="btn">Добавить</button>
-        </div>
-      </form>
-    </div>
-  </div>
+import React, { useState, useEffect } from 'react';
+import { PlusCircle, Settings, BarChart3, FileDown, Trash2, Edit2, Save, X, Upload, Calendar } from 'lucide-react';
 
-  <script>
-    const GRANT_PER_PERSON = 280;
-    const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-    
-    let groups = [];
-    let calendar = [];
-    let sessions = [];
-    let expenses = [];
-    let currentMonth = new Date(2025, 0, 1);
-    
-    function loadData() {
-      groups = JSON.parse(localStorage.getItem('groups') || '[]');
-      calendar = JSON.parse(localStorage.getItem('calendar') || '[]');
-      sessions = JSON.parse(localStorage.getItem('sessions') || '[]');
-      expenses = JSON.parse(localStorage.getItem('expenses') || '[]');
-      
-      if (groups.length === 0) {
-        groups = [{
-          id: 1,
-          code: "G-02250378",
-          name: "Танцы",
-          teacher: "Екатерина Иванова",
-          location: "Буденного",
-          salaryType: "percent",
-          salaryValue: 50,
-          hallCost: 0
-        }];
-      }
-      
-      updateDisplay();
-    }
-    
-    function saveData() {
-      localStorage.setItem('groups', JSON.stringify(groups));
-      localStorage.setItem('calendar', JSON.stringify(calendar));
-      localStorage.setItem('sessions', JSON.stringify(sessions));
-      localStorage.setItem('expenses', JSON.stringify(expenses));
-    }
-    
-    function showAlert(msg, type = 'success') {
-      const alert = document.createElement('div');
-      alert.className = `alert ${type === 'error' ? 'error' : ''}`;
-      alert.textContent = msg;
-      document.body.appendChild(alert);
-      setTimeout(() => alert.remove(), 3000);
-    }
-    
-    function formatNumber(num) {
-      return num.toLocaleString('ru-RU');
-    }
-    
-    function closeModal(id) {
-      document.getElementById(id).classList.remove('active');
-    }
-    
-    // ГРУППЫ
-    function showGroupsModal() {
-      renderGroupsList();
-      document.getElementById('groupsModal').classList.add('active');
-    }
-    
-    function showAddGroupForm() {
-      document.getElementById('groupFormTitle').textContent = 'Новая группа';
-      document.getElementById('editGroupId').value = '';
-      document.getElementById('groupCode').value = '';
-      document.getElementById('groupName').value = '';
-      document.getElementById('groupTeacher').value = '';
-      document.getElementById('groupLocation').value = 'Буденного';
-      document.getElementById('groupSalaryType').value = 'percent';
-      document.getElementById('groupSalaryValue').value = '50';
-      document.getElementById('groupHallCost').value = '0';
-      toggleSalaryLabel();
-      closeModal('groupsModal');
-      document.getElementById('groupFormModal').classList.add('active');
-    }
-    
-    function showEditGroupForm(id) {
-      const g = groups.find(x => x.id === id);
-      if (!g) return;
-      
-      document.getElementById('groupFormTitle').textContent = 'Редактировать';
-      document.getElementById('editGroupId').value = g.id;
-      document.getElementById('groupCode').value = g.code;
-      document.getElementById('groupName').value = g.name;
-      document.getElementById('groupTeacher').value = g.teacher;
-      document.getElementById('groupLocation').value = g.location;
-      document.getElementById('groupSalaryType').value = g.salaryType;
-      document.getElementById('groupSalaryValue').value = g.salaryValue;
-      document.getElementById('groupHallCost').value = g.hallCost;
-      toggleSalaryLabel();
-      closeModal('groupsModal');
-      document.getElementById('groupFormModal').classList.add('active');
-    }
-    
-    function toggleSalaryLabel() {
-      const type = document.getElementById('groupSalaryType').value;
-      document.getElementById('groupSalaryLabel').textContent = 
-        type === 'percent' ? 'Процент (%) *' : 'Ставка (₽) *';
-    }
-    
-    function renderGroupsList() {
-      const container = document.getElementById('groupsList');
-      if (groups.length === 0) {
-        container.innerHTML = '<p style="color: #94a3b8; text-align: center; padding: 20px;">Нет групп</p>';
-        return;
-      }
-      
-      container.innerHTML = groups.map(g => `
-        <div class="group-card">
-          <h3>${g.code} - ${g.name}</h3>
-          <p>👤 ${g.teacher} • 📍 ${g.location}<br>
-          💰 ${g.salaryType === 'percent' ? g.salaryValue + '%' : formatNumber(g.salaryValue) + '₽'}
-          ${g.hallCost > 0 ? ' • 🏢 ' + formatNumber(g.hallCost) + '₽' : ''}</p>
-          <div style="display: flex; gap: 5px;">
-            <button class="btn secondary small" onclick="showEditGroupForm(${g.id})">✏️ Изменить</button>
-            <button class="btn secondary small" onclick="deleteGroup(${g.id})">🗑️</button>
-          </div>
-        </div>
-      `).join('');
-    }
-    
-    function saveGroup(e) {
-      e.preventDefault();
-      
-      const editId = document.getElementById('editGroupId').value;
-      const data = {
-        code: document.getElementById('groupCode').value.trim(),
-        name: document.getElementById('groupName').value.trim(),
-        teacher: document.getElementById('groupTeacher').value.trim(),
-        location: document.getElementById('groupLocation').value,
-        salaryType: document.getElementById('groupSalaryType').value,
-        salaryValue: parseFloat(document.getElementById('groupSalaryValue').value),
-        hallCost: parseFloat(document.getElementById('groupHallCost').value) || 0
-      };
-      
-      if (editId) {
-        const g = groups.find(x => x.id === parseInt(editId));
-        if (g) Object.assign(g, data);
-      } else {
-        data.id = groups.length > 0 ? Math.max(...groups.map(x => x.id)) + 1 : 1;
-        groups.push(data);
-      }
-      
-      saveData();
-      closeModal('groupFormModal');
-      showAlert(editId ? 'Обновлено!' : 'Группа добавлена!');
-      showGroupsModal();
-    }
-    
-    function deleteGroup(id) {
-      if (!confirm('Удалить группу?')) return;
-      groups = groups.filter(g => g.id !== id);
-      saveData();
-      renderGroupsList();
-    }
-    
-    // КАЛЕНДАРЬ
-    function showCalendarModal() {
-      renderCalendar();
-      document.getElementById('calendarModal').classList.add('active');
-    }
-    
-    function changeMonth(delta) {
-      currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + delta, 1);
-      renderCalendar();
-    }
-    
-    function renderCalendar() {
-      const year = currentMonth.getFullYear();
-      const month = currentMonth.getMonth();
-      
-      document.getElementById('currentMonth').textContent = `${MONTHS[month]} ${year}`;
-      
-      const firstDay = new Date(year, month, 1);
-      const lastDay = new Date(year, month + 1, 0);
-      const daysInMonth = lastDay.getDate();
-      const startDay = firstDay.getDay();
-      
-      let html = '<div class="calendar-grid">';
-      
-      ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'].forEach(d => {
-        html += `<div style="font-weight: bold; text-align: center; padding: 5px; font-size: 11px;">${d}</div>`;
-      });
-      
-      for (let i = 0; i < startDay; i++) {
-        html += '<div></div>';
-      }
-      
-      for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const cals = calendar.filter(c => c.date === dateStr);
-        
-        html += `
-          <div class="calendar-day ${cals.length > 0 ? 'has-schedule' : ''}" onclick="showAddToCalendar('${dateStr}')">
-            <div class="calendar-day-number">${day}</div>
-            ${cals.map(c => {
-              const g = groups.find(x => x.id === c.groupId);
-              return g ? `<div class="calendar-class">${c.time || '09:00'} ${g.teacher.split(' ')[0]}</div>` : '';
-            }).join('')}
-          </div>
-        `;
-      }
-      
-      html += '</div>';
-      document.getElementById('calendarContent').innerHTML = html;
-    }
-    
-    function showAddToCalendar(dateStr) {
-      document.getElementById('calTitle').textContent = new Date(dateStr).toLocaleDateString('ru-RU');
-      document.getElementById('calDate').value = dateStr;
-      
-      const select = document.getElementById('calGroup');
-      select.innerHTML = '<option value="">Выберите</option>' +
-        groups.map(g => `<option value="${g.id}">${g.code} - ${g.name}</option>`).join('');
-      
-      document.getElementById('addToCalendarModal').classList.add('active');
-    }
-    
-    function saveToCalendar(e) {
-      e.preventDefault();
-      
-      const dateStr = document.getElementById('calDate').value;
-      const groupId = parseInt(document.getElementById('calGroup').value);
-      const time = document.getElementById('calTime').value;
-      
-      const exists = calendar.find(c => c.date === dateStr && c.groupId === groupId);
-      if (exists) {
-        showAlert('Уже добавлено!', 'error');
-        return;
-      }
-      
-      calendar.push({
-        id: calendar.length + 1,
-        date: dateStr,
-        time: time,
-        groupId: groupId
-      });
-      
-      saveData();
-      closeModal('addToCalendarModal');
-      renderCalendar();
-      showAlert('Добавлено!');
-    }
-    
-    // РАСХОДЫ
-    function showAddExpenseModal() {
-      document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
-      
-      const select = document.getElementById('expenseGroup');
-      select.innerHTML = '<option value="">Выберите</option>' +
-        groups.map(g => `<option value="${g.id}">${g.code} - ${g.name}</option>`).join('');
-      
-      document.getElementById('expenseModal').classList.add('active');
-    }
-    
-    function saveExpense(e) {
-      e.preventDefault();
-      
-      expenses.push({
-        id: expenses.length + 1,
-        date: document.getElementById('expenseDate').value,
-        groupId: parseInt(document.getElementById('expenseGroup').value),
-        amount: parseFloat(document.getElementById('expenseAmount').value),
-        reason: document.getElementById('expenseReason').value
-      });
-      
-      saveData();
-      closeModal('expenseModal');
-      updateDisplay();
-      showAlert('Расход добавлен!');
-    }
-    
-    // ЗАГРУЗКА DOCX
-    function showUploadModal() {
-      document.getElementById('uploadContent').innerHTML = `
-        <div class="upload-zone" onclick="document.getElementById('docxFile').click()">
-          <div class="upload-icon">📄</div>
-          <div class="upload-text">Выберите DOCX</div>
-          <div class="upload-hint">Отчет посещаемости</div>
-        </div>
-        <input type="file" id="docxFile" accept=".docx" style="display: none;" onchange="handleFileUpload(event)">
-      `;
-      document.getElementById('uploadModal').classList.add('active');
-    }
-    
-    async function handleFileUpload(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      
-      showAlert('Обработка...');
-      
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        const result = await mammoth.extractRawText({ arrayBuffer });
-        const text = result.value;
-        
-        console.log('Текст:', text.substring(0, 1000));
-        
-        const parsedData = parseReport(text);
-        
-        if (!parsedData) {
-          showAlert('Не удалось распознать', 'error');
-          return;
-        }
-        
-        showPreview(parsedData);
-        
-      } catch (error) {
-        console.error(error);
-        showAlert('Ошибка: ' + error.message, 'error');
-      }
-    }
-    
-    function parseReport(text) {
-      console.log('=== ПАРСИНГ ===');
-      
-      const codeMatch = text.match(/код\s+группы[:\s]+([A-Z]-\d+)/i) || text.match(/([A-Z]-\d{8})/);
-      
-      if (!codeMatch) {
-        showAlert('Код группы не найден', 'error');
-        return null;
-      }
-      
-      const code = codeMatch[1];
-      console.log('Код:', code);
-      
-      const group = groups.find(g => g.code === code);
-      if (!group) {
-        showAlert(`Группа ${code} не найдена!`, 'error');
-        return null;
-      }
-      
-      const allDates = [...text.matchAll(/(\d{2})\.(\d{2})/g)];
-      console.log('Дат найдено:', allDates.length);
-      
-      const uniqueDates = [];
-      const seen = new Set();
-      
-      for (let m of allDates) {
-        const ds = `${m[1]}.${m[2]}`;
-        if (!seen.has(ds) && parseInt(m[1]) <= 31 && parseInt(m[2]) <= 12) {
-          seen.add(ds);
-          uniqueDates.push(m);
-          if (uniqueDates.length >= 15) break;
-        }
-      }
-      
-      console.log('Уникальных дат:', uniqueDates.length);
-      
-      if (uniqueDates.length === 0) {
-        showAlert('Даты не найдены', 'error');
-        return null;
-      }
-      
-      const year = new Date().getFullYear();
-      const sessionData = [];
-      
-      uniqueDates.forEach((m, idx) => {
-        const day = m[1];
-        const month = m[2];
-        const dateStr = `${day}.${month}`;
-        const fullDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-        
-        const datePos = text.indexOf(dateStr);
-        const nextDate = uniqueDates[idx + 1];
-        const nextPos = nextDate ? text.indexOf(`${nextDate[1]}.${nextDate[2]}`, datePos + 1) : -1;
-        
-        let segment;
-        if (nextPos > 0) {
-          segment = text.substring(datePos, nextPos);
-        } else {
-          const itogo = text.indexOf('Итого', datePos);
-          segment = text.substring(datePos, itogo > 0 ? itogo : datePos + 2000);
-        }
-        
-        const plusCount = (segment.match(/\+/g) || []).length;
-        
-        console.log(`${dateStr}: ${plusCount} чел`);
-        
-        if (plusCount > 0) {
-          const calEntry = calendar.find(c => c.date === fullDate);
-          const finalGroup = calEntry ? groups.find(g => g.id === calEntry.groupId) : group;
-          
-          sessionData.push({
-            date: fullDate,
-            time: calEntry?.time || '09:00',
-            people: plusCount,
-            group: finalGroup || group
-          });
-        }
-      });
-      
-      console.log('Занятий:', sessionData.length);
-      console.log('Всего людей:', sessionData.reduce((s, x) => s + x.people, 0));
-      
-      if (sessionData.length === 0) {
-        showAlert('Посещаемость не найдена', 'error');
-        return null;
-      }
-      
-      return { sessions: sessionData };
-    }
-    
-    function showPreview(data) {
-      const { sessions: parsed } = data;
-      
-      const totalPeople = parsed.reduce((s, x) => s + x.people, 0);
-      const totalIncome = totalPeople * GRANT_PER_PERSON;
-      
-      const byTeacher = {};
-      parsed.forEach(s => {
-        const t = s.group.teacher;
-        if (!byTeacher[t]) {
-          byTeacher[t] = { teacher: t, sessions: [], income: 0, salary: 0 };
-        }
-        
-        byTeacher[t].sessions.push(s);
-        const inc = s.people * GRANT_PER_PERSON;
-        byTeacher[t].income += inc;
-        
-        if (s.group.salaryType === 'fixed') {
-          byTeacher[t].salary += s.group.salaryValue;
-        } else {
-          byTeacher[t].salary += Math.round((inc * s.group.salaryValue) / 100);
-        }
-      });
-      
-      const html = `
-        <div class="info-box" style="border-left-color: #22c55e;">
-          <div class="info-title">✅ Обработано!</div>
-        </div>
-        
-        <div class="preview-section">
-          <div class="preview-title">📊 Данные</div>
-          <div class="preview-item"><strong>Занятий:</strong> ${parsed.length}</div>
-          <div class="preview-item">
-            <strong>Участников:</strong> 
-            <span style="font-size: 20px; color: #4ade80; font-weight: bold;">${totalPeople}</span>
-          </div>
-          <div class="preview-item"><strong>Грант:</strong> <span class="green">${formatNumber(totalIncome)}₽</span></div>
-        </div>
-        
-        <div class="preview-section" style="max-height: 250px; overflow-y: auto;">
-          <div class="preview-title">📅 По датам</div>
-          ${parsed.map(s => `
-            <div style="padding: 6px; background: #1e293b; border-radius: 4px; margin-bottom: 3px; font-size: 12px;">
-              <strong>${s.date}</strong> ${s.time} • ${s.group.name} • 
-              <span style="color: #4ade80; font-weight: bold;">${s.people} чел.</span>
-            </div>
-          `).join('')}
-        </div>
-        
-        ${Object.values(byTeacher).map(t => `
-          <div class="preview-section">
-            <div class="preview-title">👤 ${t.teacher}</div>
-            <div class="preview-item"><strong>Занятий:</strong> ${t.sessions.length}</div>
-            <div class="preview-item"><strong>Людей:</strong> ${t.sessions.reduce((s, x) => s + x.people, 0)}</div>
-            <div class="preview-item"><strong>Грант:</strong> <span class="green">${formatNumber(t.income)}₽</span></div>
-            <div class="preview-item"><strong>Зарплата:</strong> <span class="yellow">${formatNumber(t.salary)}₽</span></div>
-          </div>
-        `).join('')}
-        
-        <div class="form-actions">
-          <button class="btn secondary" onclick="closeModal('uploadModal')">Отмена</button>
-          <button class="btn success" onclick='confirmImport(${JSON.stringify(data).replace(/'/g, "&#39;")})'>✅ Добавить</button>
-        </div>
-      `;
-      
-      document.getElementById('uploadContent').innerHTML = html;
-    }
-    
-    function confirmImport(data) {
-      data.sessions.forEach(s => {
-        sessions.push({
-          id: sessions.length + 1,
-          groupId: s.group.id,
-          date: s.date,
-          time: s.time,
-          people: s.people,
-          teacher: s.group.teacher
-        });
-      });
-      
-      saveData();
-      closeModal('uploadModal');
-      updateDisplay();
-      showAlert(`✅ Добавлено ${data.sessions.length} занятий!`);
-    }
-    
-    // ОТОБРАЖЕНИЕ
-    function updateDisplay() {
-      renderStats();
-      renderTable();
-    }
-    
-    function renderStats() {
-      const totalSessions = sessions.length;
-      const totalPeople = sessions.reduce((s, x) => s + x.people, 0);
-      const totalIncome = totalPeople * GRANT_PER_PERSON;
-      
-      let totalSalary = 0;
-      let totalHallCost = 0;
-      
-      sessions.forEach(s => {
-        const g = groups.find(x => x.id === s.groupId);
-        if (!g) return;
-        
-        const inc = s.people * GRANT_PER_PERSON;
-        if (g.salaryType === 'fixed') {
-          totalSalary += g.salaryValue;
-        } else {
-          totalSalary += Math.round((inc * g.salaryValue) / 100);
-        }
-        totalHallCost += g.hallCost;
-      });
-      
-      expenses.forEach(e => {
-        totalHallCost += e.amount;
-      });
-      
-      const totalProfit = totalIncome - totalSalary - totalHallCost;
-      const teachers = new Set(sessions.map(s => s.teacher)).size;
-      
-      document.getElementById('statsContainer').innerHTML = `
-        <div class="stat-card">
-          <div class="stat-label">Педагогов</div>
-          <div class="stat-value">${teachers}</div>
-        </div>
-        <div class="stat-card purple">
-          <div class="stat-label">Участников</div>
-          <div class="stat-value">${totalPeople}</div>
-          <div class="stat-change">${totalSessions} занятий</div>
-        </div>
-        <div class="stat-card green">
-          <div class="stat-label">Грант</div>
-          <div class="stat-value">${formatNumber(totalIncome)}₽</div>
-        </div>
-        <div class="stat-card yellow">
-          <div class="stat-label">Зарплаты</div>
-          <div class="stat-value">${formatNumber(totalSalary)}₽</div>
-        </div>
-        <div class="stat-card red">
-          <div class="stat-label">Аренда</div>
-          <div class="stat-value">${formatNumber(totalHallCost)}₽</div>
-          <div class="stat-change">${expenses.length > 0 ? '+ расходы' : ''}</div>
-        </div>
-        <div class="stat-card" style="background: linear-gradient(135deg, #0e7490, #0891b2);">
-          <div class="stat-label">Прибыль</div>
-          <div class="stat-value">${formatNumber(totalProfit)}₽</div>
-        </div>
-      `;
-    }
-    
-    function renderTable() {
-      const byTeacher = {};
-      
-      sessions.forEach(s => {
-        const t = s.teacher;
-        if (!byTeacher[t]) {
-          byTeacher[t] = { teacher: t, groups: new Set(), sessions: 0, people: 0, income: 0, salary: 0, hallCost: 0 };
-        }
-        
-        byTeacher[t].groups.add(s.groupId);
-        byTeacher[t].sessions++;
-        byTeacher[t].people += s.people;
-        
-        const g = groups.find(x => x.id === s.groupId);
-        if (g) {
-          const inc = s.people * GRANT_PER_PERSON;
-          byTeacher[t].income += inc;
-          
-          if (g.salaryType === 'fixed') {
-            byTeacher[t].salary += g.salaryValue;
-          } else {
-            byTeacher[t].salary += Math.round((inc * g.salaryValue) / 100);
-          }
-          
-          byTeacher[t].hallCost += g.hallCost;
-        }
-      });
-      
-      const teacherData = Object.values(byTeacher).map(t => ({
-        ...t,
-        groups: t.groups.size,
-        profit: t.income - t.salary - t.hallCost
-      }));
-      
-      const tbody = document.getElementById('tableBody');
-      const tfoot = document.getElementById('tableFoot');
-      
-      if (teacherData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #94a3b8; padding: 30px;">Нет данных</td></tr>';
-        tfoot.innerHTML = '';
-        return;
-      }
-      
-      tbody.innerHTML = teacherData.map(t => `
-        <tr>
-          <td style="font-weight: bold;">${t.teacher}</td>
-          <td class="text-center">${t.sessions}</td>
-          <td class="text-center"><span class="badge" style="background: #7c3aed;">${t.people}</span></td>
-          <td class="text-right"><span class="amount green">${formatNumber(t.income)}₽</span></td>
-          <td class="text-right"><span class="amount yellow">${formatNumber(t.salary)}₽</span></td>
-          <td class="text-right"><span class="amount red">${formatNumber(t.hallCost)}₽</span></td>
-          <td class="text-right"><span class="amount blue">${formatNumber(t.profit)}₽</span></td>
-        </tr>
-      `).join('');
-      
-      const totals = {
-        sessions: sessions.length,
-        people: sessions.reduce((s, x) => s + x.people, 0),
-        income: teacherData.reduce((s, t) => s + t.income, 0),
-        salary: teacherData.reduce((s, t) => s + t.salary, 0),
-        hallCost: teacherData.reduce((s, t) => s + t.hallCost, 0) + expenses.reduce((s, e) => s + e.amount, 0),
-        profit: teacherData.reduce((s, t) => s + t.profit, 0) - expenses.reduce((s, e) => s + e.amount, 0)
-      };
-      
-      tfoot.innerHTML = `
-        <tr>
-          <td>ИТОГО:</td>
-          <td class="text-center">${totals.sessions}</td>
-          <td class="text-center purple">${totals.people}</td>
-          <td class="text-right green">${formatNumber(totals.income)}₽</td>
-          <td class="text-right yellow">${formatNumber(totals.salary)}₽</td>
-          <td class="text-right red">${formatNumber(totals.hallCost)}₽</td>
-          <td class="text-right blue">${formatNumber(totals.profit)}₽</td>
-        </tr>
-      `;
-    }
-    
-    window.addEventListener('click', e => {
-      if (e.target.classList.contains('modal')) {
-        e.target.classList.remove('active');
-      }
-    });
-    
+const DanceSchoolTracker = () => {
+  const [activeTab, setActiveTab] = useState('input');
+  const [records, setRecords] = useState([]);
+  const [teachers, setTeachers] = useState([
+    { id: 1, name: 'Иванова А.П.', rate: 40 },
+    { id: 2, name: 'Петрова М.С.', rate: 40 }
+  ]);
+  const [groups, setGroups] = useState(['G-02250378', 'Группа 2', 'Группа 3', 'Группа 4']);
+  const [expenses, setExpenses] = useState({
+    rent: 50000,
+    utilities: 10000,
+    water: 2000,
+    admin: 30000,
+    paymentRate: 280
+  });
+  
+  // Быстрый ввод данных из отчета
+  const [quickInputData, setQuickInputData] = useState({
+    group: '',
+    teacher: '',
+    month: new Date().toISOString().slice(0, 7),
+    sessionDates: '',
+    totalVisits: '',
+    totalSessions: ''
+  });
+  
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  const [formData, setFormData] = useState({
+    group: '',
+    date: new Date().toISOString().split('T')[0],
+    teacher: '',
+    count: ''
+  });
+  
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [editingTeacher, setEditingTeacher] = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [filterTeacher, setFilterTeacher] = useState('all');
+  const [filterGroup, setFilterGroup] = useState('all');
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
     loadData();
-  </script>
-</body>
-</html>
+  }, []);
+
+  const loadData = async () => {
+    try {
+      if (window.storage) {
+        const recordsData = await window.storage.get('dance_records');
+        const teachersData = await window.storage.get('dance_teachers');
+        const groupsData = await window.storage.get('dance_groups');
+        const expensesData = await window.storage.get('dance_expenses');
+        
+        if (recordsData && recordsData.value) {
+          setRecords(JSON.parse(recordsData.value));
+        }
+        if (teachersData && teachersData.value) {
+          setTeachers(JSON.parse(teachersData.value));
+        }
+        if (groupsData && groupsData.value) {
+          setGroups(JSON.parse(groupsData.value));
+        }
+        if (expensesData && expensesData.value) {
+          setExpenses(JSON.parse(expensesData.value));
+        }
+      }
+    } catch (error) {
+      console.log('Загрузка:', error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveData = async () => {
+    try {
+      if (window.storage) {
+        await window.storage.set('dance_records', JSON.stringify(records));
+        await window.storage.set('dance_teachers', JSON.stringify(teachers));
+        await window.storage.set('dance_groups', JSON.stringify(groups));
+        await window.storage.set('dance_expenses', JSON.stringify(expenses));
+      }
+    } catch (error) {
+      console.log('Сохранение:', error.message);
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoading) {
+      saveData();
+    }
+  }, [records, teachers, groups, expenses]);
+
+  // Обработка загруженного файла
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    setUploadedFile(file);
+    setIsProcessing(true);
+    
+    try {
+      let text = '';
+      
+      // Обработка .docx файлов
+      if (file.name.endsWith('.docx')) {
+        const arrayBuffer = await file.arrayBuffer();
+        const mammoth = window.mammoth || await import('mammoth');
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        text = result.value;
+      } 
+      // Обработка .txt и .doc (как текст)
+      else {
+        text = await file.text();
+      }
+      
+      console.log('Извлеченный текст:', text.substring(0, 500));
+      
+      // Извлекаем данные из текста
+      // Ищем код группы типа G-02250378
+      const groupMatch = text.match(/[GG][-\s]*\d{8}/i);
+      
+      // Ищем месяц и год
+      const monthMatch = text.match(/(январ[ья]|феврал[ья]|март[а]?|апрел[ья]|ма[йя]|июн[ья]|июл[ья]|август[а]?|сентябр[ья]|октябр[ья]|ноябр[ья]|декабр[ья])\s*,?\s*(\d{4})/i);
+      
+      // Ищем итоговое количество посещений (обычно в последних строках)
+      const visitsMatch = text.match(/Итого[^\d\n]*?(\d{1,4})\s*\d{1,4}/i) || 
+                          text.match(/всего[^\d]*?(\d{2,4})/i);
+      
+      // Ищем все даты в формате DD.MM
+      const allDatesMatches = text.matchAll(/(\d{2})\.(\d{2})/g);
+      const datesSet = new Set();
+      
+      for (const match of allDatesMatches) {
+        const day = match[1];
+        const month = match[2];
+        // Проверяем что это реальная дата (день 1-31, месяц 1-12)
+        if (parseInt(day) >= 1 && parseInt(day) <= 31 && 
+            parseInt(month) >= 1 && parseInt(month) <= 12) {
+          datesSet.add(`${day}.${month}`);
+        }
+      }
+      
+      const uniqueDates = Array.from(datesSet).sort();
+      
+      console.log('Найденная группа:', groupMatch?.[0]);
+      console.log('Найденный месяц:', monthMatch);
+      console.log('Найдено посещений:', visitsMatch?.[1]);
+      console.log('Найдены даты:', uniqueDates);
+      
+      // Заполняем форму
+      if (groupMatch) {
+        const groupCode = groupMatch[0].replace(/\s/g, '');
+        setQuickInputData(prev => ({...prev, group: groupCode}));
+      }
+      
+      if (monthMatch) {
+        const months = {
+          'январ': '01', 'феврал': '02', 'март': '03', 'апрел': '04',
+          'май': '05', 'ма': '05', 'июн': '06', 'июл': '07', 'август': '08',
+          'сентябр': '09', 'октябр': '10', 'ноябр': '11', 'декабр': '12'
+        };
+        const monthName = monthMatch[1].toLowerCase().replace(/[ья]$/, '');
+        const monthNum = months[monthName];
+        const year = monthMatch[2];
+        if (monthNum && year) {
+          setQuickInputData(prev => ({...prev, month: `${year}-${monthNum}`}));
+        }
+      }
+      
+      if (visitsMatch) {
+        const totalVisits = parseInt(visitsMatch[1]);
+        setQuickInputData(prev => ({...prev, totalVisits: totalVisits.toString()}));
+      }
+      
+      if (uniqueDates.length > 0) {
+        // Берем только уникальные даты (обычно это даты занятий в заголовках)
+        // Фильтруем даты которые повторяются слишком много раз (скорее всего это даты рождения)
+        const sessionDates = uniqueDates.slice(0, 15); // Максимум 15 занятий
+        
+        setQuickInputData(prev => ({
+          ...prev, 
+          sessionDates: sessionDates.join(', '),
+          totalSessions: sessionDates.length.toString()
+        }));
+      }
+      
+      alert('✅ Файл загружен!\n\n' +
+            'Автоматически заполнено:\n' +
+            (groupMatch ? `✓ Группа: ${groupMatch[0]}\n` : '') +
+            (monthMatch ? `✓ Месяц: ${monthMatch[1]} ${monthMatch[2]}\n` : '') +
+            (visitsMatch ? `✓ Посещений: ${visitsMatch[1]}\n` : '') +
+            (uniqueDates.length ? `✓ Дат занятий: ${uniqueDates.length}\n\n` : '') +
+            'Проверьте данные и выберите педагога!');
+      
+    } catch (error) {
+      console.error('Ошибка обработки файла:', error);
+      alert('⚠️ Не удалось автоматически извлечь данные из файла.\n\n' +
+            'Возможные причины:\n' +
+            '• Файл поврежден\n' +
+            '• Неподдерживаемый формат\n\n' +
+            'Попробуйте заполнить поля вручную.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Быстрое добавление из отчета
+  const addQuickReport = () => {
+    console.log('Функция addQuickReport вызвана');
+    console.log('Текущие данные:', quickInputData);
+    
+    // Проверка полей
+    if (!quickInputData.group) {
+      alert('❌ Выберите группу');
+      return;
+    }
+    
+    if (!quickInputData.teacher) {
+      alert('❌ Выберите педагога');
+      return;
+    }
+    
+    if (!quickInputData.totalSessions) {
+      alert('❌ Введите количество занятий');
+      return;
+    }
+    
+    if (!quickInputData.totalVisits) {
+      alert('❌ Введите количество посещений');
+      return;
+    }
+
+    const totalVisits = parseInt(quickInputData.totalVisits);
+    const totalSessions = parseInt(quickInputData.totalSessions);
+    
+    console.log('Посещений:', totalVisits, 'Занятий:', totalSessions);
+    
+    if (isNaN(totalVisits) || isNaN(totalSessions) || totalVisits <= 0 || totalSessions <= 0) {
+      alert('❌ Введите корректные числа');
+      return;
+    }
+
+    const avgPerSession = Math.round(totalVisits / totalSessions);
+    console.log('Среднее на занятие:', avgPerSession);
+
+    // Парсим даты
+    let dates = [];
+    const year = quickInputData.month.split('-')[0];
+    const month = quickInputData.month.split('-')[1];
+    
+    if (quickInputData.sessionDates.trim()) {
+      const dateStrings = quickInputData.sessionDates.split(',');
+      console.log('Парсим даты:', dateStrings);
+      
+      for (let dateStr of dateStrings) {
+        const cleaned = dateStr.trim();
+        const dayMatch = cleaned.match(/(\d{1,2})/);
+        if (dayMatch) {
+          const day = dayMatch[1].padStart(2, '0');
+          dates.push(`${year}-${month}-${day}`);
+        }
+      }
+    }
+    
+    console.log('Распарсенные даты:', dates);
+
+    // Если дат недостаточно, добавляем
+    while (dates.length < totalSessions) {
+      const yearNum = parseInt(year);
+      const monthNum = parseInt(month) - 1;
+      const daysInMonth = new Date(yearNum, monthNum + 1, 0).getDate();
+      const day = Math.min(dates.length + 1, daysInMonth);
+      dates.push(`${year}-${month}-${String(day).padStart(2, '0')}`);
+    }
+
+    // Создаем записи
+    const newRecords = [];
+    let remainingVisits = totalVisits;
+    
+    for (let i = 0; i < totalSessions; i++) {
+      const count = i < totalSessions - 1 ? avgPerSession : remainingVisits;
+      remainingVisits -= count;
+      
+      newRecords.push({
+        id: Date.now() + i,
+        group: quickInputData.group,
+        date: dates[i] || dates[0],
+        teacher: quickInputData.teacher,
+        count: count
+      });
+    }
+    
+    console.log('Создано записей:', newRecords);
+
+    try {
+      setRecords([...records, ...newRecords]);
+      console.log('Записи добавлены в state');
+      
+      setQuickInputData({
+        group: '',
+        teacher: '',
+        month: new Date().toISOString().slice(0, 7),
+        sessionDates: '',
+        totalVisits: '',
+        totalSessions: ''
+      });
+      
+      alert(`✅ Добавлено ${newRecords.length} записей! Перейдите во вкладку "По датам" чтобы увидеть их.`);
+      setActiveTab('input');
+    } catch (error) {
+      console.error('Ошибка:', error);
+      alert('❌ Ошибка при добавлении: ' + error.message);
+    }
+  };
+
+  const addRecord = () => {
+    if (!formData.group || !formData.date || !formData.teacher || !formData.count) {
+      alert('Заполните все поля');
+      return;
+    }
+
+    const newRecord = {
+      id: Date.now(),
+      group: formData.group,
+      date: formData.date,
+      teacher: formData.teacher,
+      count: parseInt(formData.count)
+    };
+
+    setRecords([...records, newRecord]);
+    setFormData({
+      group: '',
+      date: new Date().toISOString().split('T')[0],
+      teacher: '',
+      count: ''
+    });
+  };
+
+  const updateRecord = () => {
+    setRecords(records.map(r => r.id === editingRecord.id ? editingRecord : r));
+    setEditingRecord(null);
+  };
+
+  const deleteRecord = (id) => {
+    if (window.confirm('Удалить запись?')) {
+      setRecords(records.filter(r => r.id !== id));
+    }
+  };
+
+  const addTeacher = () => {
+    const name = window.prompt('Имя педагога:');
+    if (!name) return;
+    const rateStr = window.prompt('Ставка % (например, 40):');
+    if (!rateStr) return;
+    const rate = parseInt(rateStr);
+    if (isNaN(rate)) {
+      alert('Введите корректное число для ставки');
+      return;
+    }
+    setTeachers([...teachers, { id: Date.now(), name, rate }]);
+  };
+
+  const updateTeacher = () => {
+    setTeachers(teachers.map(t => t.id === editingTeacher.id ? editingTeacher : t));
+    setEditingTeacher(null);
+  };
+
+  const deleteTeacher = (id) => {
+    if (window.confirm('Удалить педагога?')) {
+      setTeachers(teachers.filter(t => t.id !== id));
+    }
+  };
+
+  const addGroup = () => {
+    const name = window.prompt('Название/код группы:');
+    if (name && !groups.includes(name)) {
+      setGroups([...groups, name]);
+    }
+  };
+
+  const updateGroup = (oldName) => {
+    const newName = window.prompt('Новое название группы:', oldName);
+    if (newName && newName !== oldName) {
+      setGroups(groups.map(g => g === oldName ? newName : g));
+      setRecords(records.map(r => r.group === oldName ? {...r, group: newName} : r));
+    }
+  };
+
+  const deleteGroup = (name) => {
+    if (window.confirm('Удалить группу?')) {
+      setGroups(groups.filter(g => g !== name));
+    }
+  };
+
+  const getFilteredRecords = () => {
+    return records.filter(r => {
+      const recordMonth = r.date.slice(0, 7);
+      const matchMonth = recordMonth === selectedMonth;
+      const matchTeacher = filterTeacher === 'all' || r.teacher === filterTeacher;
+      const matchGroup = filterGroup === 'all' || r.group === filterGroup;
+      return matchMonth && matchTeacher && matchGroup;
+    });
+  };
+
+  const calculateStats = () => {
+    const filtered = getFilteredRecords();
+    const byTeacher = {};
+
+    filtered.forEach(record => {
+      if (!byTeacher[record.teacher]) {
+        byTeacher[record.teacher] = {
+          name: record.teacher,
+          days: new Set(),
+          totalVisits: 0,
+          records: [],
+          groupStats: {}
+        };
+      }
+      byTeacher[record.teacher].days.add(record.date);
+      byTeacher[record.teacher].totalVisits += record.count;
+      byTeacher[record.teacher].records.push(record);
+      
+      // Статистика по группам
+      if (!byTeacher[record.teacher].groupStats[record.group]) {
+        byTeacher[record.teacher].groupStats[record.group] = {
+          sessions: 0,
+          visits: 0
+        };
+      }
+      byTeacher[record.teacher].groupStats[record.group].sessions++;
+      byTeacher[record.teacher].groupStats[record.group].visits += record.count;
+    });
+
+    return Object.values(byTeacher).map(t => {
+      const teacher = teachers.find(te => te.name === t.name);
+      const rate = teacher ? teacher.rate : 40;
+      const income = t.totalVisits * expenses.paymentRate;
+      const salary = income * (rate / 100);
+      
+      return {
+        name: t.name,
+        workDays: t.days.size,
+        totalVisits: t.totalVisits,
+        income,
+        salary,
+        rate,
+        groupStats: t.groupStats
+      };
+    });
+  };
+
+  const calculateTotals = () => {
+    const stats = calculateStats();
+    const totalIncome = stats.reduce((sum, t) => sum + t.income, 0);
+    const totalSalaries = stats.reduce((sum, t) => sum + t.salary, 0);
+    const totalExpenses = expenses.rent + expenses.utilities + expenses.water + expenses.admin;
+    const netProfit = totalIncome - totalSalaries - totalExpenses;
+
+    return { totalIncome, totalSalaries, totalExpenses, netProfit, stats };
+  };
+
+  const exportToCSV = () => {
+    const stats = calculateStats();
+    let csv = 'Педагог,Рабочих дней,Всего посещений,Доход от гос-ва,Ставка %,Зарплата\n';
+    
+    stats.forEach(s => {
+      csv += `${s.name},${s.workDays},${s.totalVisits},${s.income},${s.rate}%,${s.salary}\n`;
+    });
+
+    csv += '\n\nДетали по группам\n';
+    csv += 'Педагог,Группа,Занятий,Посещений,Доход\n';
+    stats.forEach(s => {
+      Object.entries(s.groupStats).forEach(([group, data]) => {
+        const groupIncome = data.visits * expenses.paymentRate;
+        csv += `${s.name},${group},${data.sessions},${data.visits},${groupIncome}\n`;
+      });
+    });
+
+    const totals = calculateTotals();
+    csv += '\n\nИтоги\n';
+    csv += `Общий доход,${totals.totalIncome}\n`;
+    csv += `Зарплаты педагогов,${totals.totalSalaries}\n`;
+    csv += `Аренда зала,${expenses.rent}\n`;
+    csv += `Коммунальные,${expenses.utilities}\n`;
+    csv += `Вода,${expenses.water}\n`;
+    csv += `Администратор,${expenses.admin}\n`;
+    csv += `Общие расходы,${totals.totalExpenses}\n`;
+    csv += `Чистая прибыль компании,${totals.netProfit}\n`;
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `отчет_${selectedMonth}.csv`;
+    link.click();
+  };
+
+  const totals = calculateTotals();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
+        <div className="text-2xl text-purple-700">Загрузка...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-4">
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <h1 className="text-3xl font-bold text-purple-700 mb-2">Московское долголетие</h1>
+          <p className="text-gray-600">Система учета танцевальной школы АНО "АФИНА"</p>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-lg mb-6">
+          <div className="flex border-b overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('quick')}
+              className={`px-6 py-3 font-medium flex items-center gap-2 whitespace-nowrap ${activeTab === 'quick' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
+            >
+              <Upload size={20} /> Быстрый ввод
+            </button>
+            <button
+              onClick={() => setActiveTab('input')}
+              className={`px-6 py-3 font-medium flex items-center gap-2 whitespace-nowrap ${activeTab === 'input' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
+            >
+              <Calendar size={20} /> По датам
+            </button>
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`px-6 py-3 font-medium flex items-center gap-2 whitespace-nowrap ${activeTab === 'reports' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
+            >
+              <BarChart3 size={20} /> Отчеты
+            </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`px-6 py-3 font-medium flex items-center gap-2 whitespace-nowrap ${activeTab === 'settings' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
+            >
+              <Settings size={20} /> Настройки
+            </button>
+          </div>
+
+          <div className="p-6">
+            {activeTab === 'quick' && (
+              <div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                  <h3 className="font-bold text-blue-900 mb-2">💡 Быстрый ввод из отчета</h3>
+                  <p className="text-sm text-blue-800">
+                    Загрузите файл отчета или заполните поля вручную
+                  </p>
+                </div>
+
+                {/* Загрузка файла */}
+                <div className="mb-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border-2 border-dashed border-purple-300">
+                  <label className="block cursor-pointer">
+                    <div className="text-center">
+                      <Upload size={48} className="mx-auto mb-3 text-purple-600" />
+                      <h4 className="text-lg font-bold text-gray-800 mb-2">
+                        {uploadedFile ? '✅ ' + uploadedFile.name : '📄 Загрузить отчет Word'}
+                      </h4>
+                      <p className="text-sm text-gray-600 mb-3">
+                        {uploadedFile 
+                          ? 'Нажмите для выбора другого файла' 
+                          : 'Автоматически извлечет данные из ведомости'}
+                      </p>
+                      <div className="bg-purple-600 text-white px-6 py-3 rounded-lg inline-block hover:bg-purple-700 active:bg-purple-800 transition font-medium">
+                        {isProcessing ? '⏳ Обработка...' : '📁 Выбрать файл DOCX'}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-3">
+                        Поддерживаются: .docx, .doc, .txt
+                      </p>
+                    </div>
+                    <input
+                      type="file"
+                      accept=".doc,.docx,.txt"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      disabled={isProcessing}
+                    />
+                  </label>
+                </div>
+
+                <div className="border-t-2 border-gray-200 my-6 pt-6">
+                  <h4 className="font-semibold text-gray-700 mb-4">Проверьте и заполните данные:</h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Код группы <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      list="groups-list"
+                      value={quickInputData.group}
+                      onChange={(e) => setQuickInputData({...quickInputData, group: e.target.value})}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
+                      placeholder="G-02250378 или выберите"
+                    />
+                    <datalist id="groups-list">
+                      {groups.map(g => <option key={g} value={g}>{g}</option>)}
+                    </datalist>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Педагог <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={quickInputData.teacher}
+                      onChange={(e) => setQuickInputData({...quickInputData, teacher: e.target.value})}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
+                    >
+                      <option value="">Выберите педагога</option>
+                      {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Месяц <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="month"
+                      value={quickInputData.month}
+                      onChange={(e) => setQuickInputData({...quickInputData, month: e.target.value})}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Всего занятий за месяц <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={quickInputData.totalSessions}
+                      onChange={(e) => setQuickInputData({...quickInputData, totalSessions: e.target.value})}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
+                      placeholder="Например: 8"
+                      min="1"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Всего посещений за месяц <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={quickInputData.totalVisits}
+                      onChange={(e) => setQuickInputData({...quickInputData, totalVisits: e.target.value})}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
+                      placeholder="Например: 208"
+                      min="1"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Даты занятий (необязательно)
+                    </label>
+                    <input
+                      type="text"
+                      value={quickInputData.sessionDates}
+                      onChange={(e) => setQuickInputData({...quickInputData, sessionDates: e.target.value})}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
+                      placeholder="04.11, 06.11, 11.11, 13.11..."
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Через запятую. Если не указано, распределится равномерно</p>
+                  </div>
+                </div>
+
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                  <h4 className="font-semibold text-green-900 mb-2">📊 Предпросмотр расчета</h4>
+                  {quickInputData.totalVisits && quickInputData.totalSessions ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-600">Занятий:</p>
+                        <p className="font-bold text-lg">{quickInputData.totalSessions}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Посещений:</p>
+                        <p className="font-bold text-lg">{quickInputData.totalVisits}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Среднее на занятие:</p>
+                        <p className="font-bold text-lg">
+                          {Math.round(parseInt(quickInputData.totalVisits) / parseInt(quickInputData.totalSessions))} чел
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Доход от государства:</p>
+                        <p className="font-bold text-lg text-green-600">
+                          {(parseInt(quickInputData.totalVisits) * expenses.paymentRate).toLocaleString('ru-RU')} ₽
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-600 text-sm">Заполните количество занятий и посещений для расчета</p>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => {
+                    console.log('Клик на кнопку');
+                    console.log('Данные:', quickInputData);
+                    addQuickReport();
+                  }}
+                  className="w-full bg-purple-600 text-white px-8 py-4 rounded-lg hover:bg-purple-700 active:bg-purple-800 flex items-center justify-center gap-2 transition font-medium text-lg"
+                >
+                  <Upload size={24} /> Добавить отчет
+                </button>
+
+                <div className="mt-8 bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold mb-2">📋 Пример заполнения:</h4>
+                  <ul className="text-sm space-y-1 text-gray-700">
+                    <li>• <strong>Код группы:</strong> G-02250378</li>
+                    <li>• <strong>Педагог:</strong> Иванова А.П.</li>
+                    <li>• <strong>Месяц:</strong> 2025-11 (ноябрь 2025)</li>
+                    <li>• <strong>Всего занятий:</strong> 8</li>
+                    <li>• <strong>Всего посещений:</strong> 208</li>
+                    <li>• <strong>Даты:</strong> 04.11, 06.11, 11.11, 13.11, 18.11, 20.11, 25.11, 27.11</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'input' && (
+              <div>
+                <h3 className="text-lg font-bold mb-4">Ручной ввод по датам</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Группа</label>
+                    <select
+                      value={formData.group}
+                      onChange={(e) => setFormData({...formData, group: e.target.value})}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    >
+                      <option value="">Выберите группу</option>
+                      {groups.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Дата</label>
+                    <input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData({...formData, date: e.target.value})}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Педагог</label>
+                    <select
+                      value={formData.teacher}
+                      onChange={(e) => setFormData({...formData, teacher: e.target.value})}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    >
+                      <option value="">Выберите педагога</option>
+                      {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Человек</label>
+                    <input
+                      type="number"
+                      value={formData.count}
+                      onChange={(e) => setFormData({...formData, count: e.target.value})}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={addRecord}
+                  className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2 transition"
+                >
+                  <PlusCircle size={20} /> Добавить запись
+                </button>
+
+                <div className="mt-8">
+                  <h3 className="text-xl font-bold mb-4">Все записи</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-purple-100">
+                          <th className="p-3 text-left">Дата</th>
+                          <th className="p-3 text-left">Группа</th>
+                          <th className="p-3 text-left">Педагог</th>
+                          <th className="p-3 text-left">Человек</th>
+                          <th className="p-3 text-center" style={{minWidth: '100px'}}>Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {records.length === 0 ? (
+                          <tr>
+                            <td colSpan="5" className="p-6 text-center text-gray-500">
+                              Нет записей. Используйте "Быстрый ввод" или добавьте вручную.
+                            </td>
+                          </tr>
+                        ) : (
+                          records
+                            .sort((a, b) => new Date(b.date) - new Date(a.date))
+                            .map(record => (
+                              editingRecord?.id === record.id ? (
+                                <tr key={record.id} className="border-b bg-blue-50">
+                                  <td className="p-3">
+                                    <input
+                                      type="date"
+                                      value={editingRecord.date}
+                                      onChange={(e) => setEditingRecord({...editingRecord, date: e.target.value})}
+                                      className="p-2 border rounded w-full text-sm"
+                                    />
+                                  </td>
+                                  <td className="p-3">
+                                    <select
+                                      value={editingRecord.group}
+                                      onChange={(e) => setEditingRecord({...editingRecord, group: e.target.value})}
+                                      className="p-2 border rounded w-full text-sm"
+                                    >
+                                      {groups.map(g => <option key={g} value={g}>{g}</option>)}
+                                    </select>
+                                  </td>
+                                  <td className="p-3">
+                                    <select
+                                      value={editingRecord.teacher}
+                                      onChange={(e) => setEditingRecord({...editingRecord, teacher: e.target.value})}
+                                      className="p-2 border rounded w-full text-sm"
+                                    >
+                                      {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                                    </select>
+                                  </td>
+                                  <td className="p-3">
+                                    <input
+                                      type="number"
+                                      value={editingRecord.count}
+                                      onChange={(e) => setEditingRecord({...editingRecord, count: parseInt(e.target.value) || 0})}
+                                      className="p-2 border rounded w-20 text-sm"
+                                    />
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <button 
+                                      onClick={updateRecord} 
+                                      className="text-green-600 hover:text-green-800 mr-3 p-2 active:bg-green-100 rounded" 
+                                      title="Сохранить"
+                                    >
+                                      <Save size={20} />
+                                    </button>
+                                    <button 
+                                      onClick={() => setEditingRecord(null)} 
+                                      className="text-gray-600 hover:text-gray-800 p-2 active:bg-gray-100 rounded" 
+                                      title="Отмена"
+                                    >
+                                      <X size={20} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ) : (
+                                <tr key={record.id} className="border-b hover:bg-gray-50">
+                                  <td className="p-3">{new Date(record.date).toLocaleDateString('ru-RU')}</td>
+                                  <td className="p-3">{record.group}</td>
+                                  <td className="p-3">{record.teacher}</td>
+                                  <td className="p-3">{record.count}</td>
+                                  <td className="p-3 text-center">
+                                    <button 
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setEditingRecord(record);
+                                      }} 
+                                      className="text-blue-600 hover:text-blue-800 mr-3 p-2 active:bg-blue-100 rounded inline-block cursor-pointer touch-manipulation relative z-10"
+                                      style={{WebkitTapHighlightColor: 'transparent'}}
+                                      title="Редактировать"
+                                    >
+                                      <Edit2 size={20} />
+                                    </button>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        deleteRecord(record.id);
+                                      }} 
+                                      className="text-red-600 hover:text-red-800 p-2 active:bg-red-100 rounded inline-block cursor-pointer touch-manipulation relative z-10"
+                                      style={{WebkitTapHighlightColor: 'transparent'}}
+                                      title="Удалить"
+                                    >
+                                      <Trash2 size={20} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'reports' && (
+              <div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Месяц</label>
+                    <input
+                      type="month"
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Педагог</label>
+                    <select
+                      value={filterTeacher}
+                      onChange={(e) => setFilterTeacher(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="all">Все педагоги</option>
+                      {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Группа</label>
+                    <select
+                      value={filterGroup}
+                      onChange={(e) => setFilterGroup(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="all">Все группы</option>
+                      {groups.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  onClick={exportToCSV}
+                  className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 mb-6 transition"
+                >
+                  <FileDown size={20} /> Экспорт в CSV
+                </button>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-lg shadow-lg">
+                    <p className="text-sm opacity-90 mb-1">Общий доход</p>
+                    <p className="text-3xl font-bold">{totals.totalIncome.toLocaleString('ru-RU')} ₽</p>
+                    <p className="text-xs opacity-75 mt-1">от государства</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-lg shadow-lg">
+                    <p className="text-sm opacity-90 mb-1">Зарплаты педагогов</p>
+                    <p className="text-3xl font-bold">{totals.totalSalaries.toLocaleString('ru-RU')} ₽</p>
+                    <p className="text-xs opacity-75 mt-1">по ставкам</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-6 rounded-lg shadow-lg">
+                    <p className="text-sm opacity-90 mb-1">Общие расходы</p>
+                    <p className="text-3xl font-bold">{totals.totalExpenses.toLocaleString('ru-RU')} ₽</p>
+                    <p className="text-xs opacity-75 mt-1">аренда + услуги</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-lg shadow-lg">
+                    <p className="text-sm opacity-90 mb-1">Прибыль компании</p>
+                    <p className="text-3xl font-bold">{totals.netProfit.toLocaleString('ru-RU')} ₽</p>
+                    <p className="text-xs opacity-75 mt-1">чистая</p>
+                  </div>
+                </div>
+
+                <h3 className="text-xl font-bold mb-4">Детальный отчет по педагогам</h3>
+                <div className="space-y-6">
+                  {totals.stats.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">Нет данных за выбранный период</p>
+                  ) : (
+                    totals.stats.map((stat, idx) => (
+                      <div key={idx} className="bg-white border border-gray-200 rounded-lg p-6 shadow">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h4 className="text-xl font-bold text-gray-800">{stat.name}</h4>
+                            <p className="text-sm text-gray-600">Ставка: {stat.rate}%</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-green-600">{stat.salary.toLocaleString('ru-RU')} ₽</p>
+                            <p className="text-sm text-gray-600">зарплата</p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                          <div className="bg-blue-50 p-3 rounded">
+                            <p className="text-xs text-gray-600">Рабочих дней</p>
+                            <p className="text-2xl font-bold text-blue-700">{stat.workDays}</p>
+                          </div>
+                          <div className="bg-purple-50 p-3 rounded">
+                            <p className="text-xs text-gray-600">Всего посещений</p>
+                            <p className="text-2xl font-bold text-purple-700">{stat.totalVisits}</p>
+                          </div>
+                          <div className="bg-green-50 p-3 rounded">
+                            <p className="text-xs text-gray-600">Доход от гос-ва</p>
+                            <p className="text-2xl font-bold text-green-700">{stat.income.toLocaleString('ru-RU')} ₽</p>
+                          </div>
+                          <div className="bg-orange-50 p-3 rounded">
+                            <p className="text-xs text-gray-600">Прибыль компании</p>
+                            <p className="text-2xl font-bold text-orange-700">{(stat.income - stat.salary).toLocaleString('ru-RU')} ₽</p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <h5 className="font-semibold text-sm text-gray-700 mb-2">По группам:</h5>
+                          <div className="space-y-2">
+                            {Object.entries(stat.groupStats).map(([group, data]) => (
+                              <div key={group} className="flex justify-between items-center bg-gray-50 p-3 rounded">
+                                <span className="font-medium">{group}</span>
+                                <div className="text-right text-sm">
+                                  <span className="text-gray-600">{data.sessions} занятий • {data.visits} посещений</span>
+                                  <span className="ml-3 font-bold text-green-600">
+                                    {(data.visits * expenses.paymentRate).toLocaleString('ru-RU')} ₽
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'settings' && (
+              <div>
+                <div className="mb-8">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold">Педагоги</h3>
+                    <button
+                      onClick={addTeacher}
+                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 active:bg-purple-800 flex items-center gap-2 transition"
+                    >
+                      <PlusCircle size={18} /> Добавить
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {teachers.map(t => (
+                      editingTeacher?.id === t.id ? (
+                        <div key={t.id} className="flex gap-2 items-center bg-blue-50 p-4 rounded-lg">
+                          <input
+                            type="text"
+                            value={editingTeacher.name}
+                            onChange={(e) => setEditingTeacher({...editingTeacher, name: e.target.value})}
+                            className="flex-1 p-3 border rounded text-base"
+                            placeholder="Имя"
+                          />
+                          <input
+                            type="number"
+                            value={editingTeacher.rate}
+                            onChange={(e) => setEditingTeacher({...editingTeacher, rate: parseInt(e.target.value) || 0})}
+                            className="w-24 p-3 border rounded text-base"
+                            placeholder="%"
+                          />
+                          <button 
+                            onClick={updateTeacher} 
+                            className="text-green-600 hover:text-green-800 active:bg-green-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center" 
+                            title="Сохранить"
+                          >
+                            <Save size={24} />
+                          </button>
+                          <button 
+                            onClick={() => setEditingTeacher(null)} 
+                            className="text-gray-600 hover:text-gray-800 active:bg-gray-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center" 
+                            title="Отмена"
+                          >
+                            <X size={24} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div key={t.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-lg hover:bg-gray-100">
+                          <div className="flex-1">
+                            <span className="font-medium text-base">{t.name}</span>
+                            <span className="text-gray-600 ml-4 text-sm">Ставка: {t.rate}%</span>
+                          </div>
+                          <div className="flex gap-2 relative z-10">
+                            <button 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setEditingTeacher(t);
+                              }} 
+                              className="text-blue-600 hover:text-blue-800 active:bg-blue-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer touch-manipulation"
+                              style={{WebkitTapHighlightColor: 'transparent'}}
+                              title="Редактировать"
+                            >
+                              <Edit2 size={24} />
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                deleteTeacher(t.id);
+                              }} 
+                              className="text-red-600 hover:text-red-800 active:bg-red-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer touch-manipulation" 
+                              style={{WebkitTapHighlightColor: 'transparent'}}
+                              title="Удалить"
+                            >
+                              <Trash2 size={24} />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mb-8">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold">Группы</h3>
+                    <button
+                      onClick={addGroup}
+                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 active:bg-purple-800 flex items-center gap-2 transition"
+                    >
+                      <PlusCircle size={18} /> Добавить
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {groups.map(g => (
+                      <div key={g} className="flex justify-between items-center bg-gray-50 p-4 rounded-lg hover:bg-gray-100">
+                        <span className="font-medium text-base flex-1">{g}</span>
+                        <div className="flex gap-2 relative z-10">
+                          <button 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              updateGroup(g);
+                            }} 
+                            className="text-blue-600 hover:text-blue-800 active:bg-blue-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer touch-manipulation"
+                            style={{WebkitTapHighlightColor: 'transparent'}}
+                            title="Редактировать"
+                          >
+                            <Edit2 size={24} />
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              deleteGroup(g);
+                            }} 
+                            className="text-red-600 hover:text-red-800 active:bg-red-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer touch-manipulation"
+                            style={{WebkitTapHighlightColor: 'transparent'}}
+                            title="Удалить"
+                          >
+                            <Trash2 size={24} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-bold mb-4">Расходы</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Аренда зала (₽)</label>
+                      <input
+                        type="number"
+                        value={expenses.rent}
+                        onChange={(e) => setExpenses({...expenses, rent: parseInt(e.target.value) || 0})}
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Коммунальные услуги (₽)</label>
+                      <input
+                        type="number"
+                        value={expenses.utilities}
+                        onChange={(e) => setExpenses({...expenses, utilities: parseInt(e.target.value) || 0})}
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Вода/кулер (₽)</label>
+                      <input
+                        type="number"
+                        value={expenses.water}
+                        onChange={(e) => setExpenses({...expenses, water: parseInt(e.target.value) || 0})}
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Зарплата администратора (₽)</label>
+                      <input
+                        type="number"
+                        value={expenses.admin}
+                        onChange={(e) => setExpenses({...expenses, admin: parseInt(e.target.value) || 0})}
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Ставка от государства (₽)</label>
+                      <input
+                        type="number"
+                        value={expenses.paymentRate}
+                        onChange={(e) => setExpenses({...expenses, paymentRate: parseInt(e.target.value) || 0})}
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DanceSchoolTracker;
+                                  
