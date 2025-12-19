@@ -3,183 +3,175 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Зарплаты педагогов — Московское долголетие</title>
+<title>DOCX отчёт МД</title>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
 
 <style>
 body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: #0b1220;
     color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
-
 .container {
     max-width: 420px;
     margin: auto;
     padding: 16px;
 }
+h1 { font-size: 20px; margin-bottom: 12px; }
 
-h1 {
-    font-size: 20px;
-    margin-bottom: 6px;
-}
-
-.subtitle {
-    color: #9aa4b2;
+input, button {
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    margin-bottom: 10px;
     font-size: 14px;
-    margin-bottom: 16px;
-}
-
-.buttons {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
 }
 
 button {
-    flex: 1;
-    padding: 10px;
-    border-radius: 10px;
-    border: none;
-    font-size: 14px;
-    cursor: pointer;
+    background: #2563eb;
+    color: #fff;
 }
-
-.btn-green { background: #1fa97a; color: #fff; }
-.btn-blue { background: #2563eb; color: #fff; }
-
-.cards {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    margin-bottom: 20px;
-}
-
 .card {
-    border-radius: 14px;
-    padding: 14px;
-    font-size: 14px;
-}
-
-.card span {
-    display: block;
-    font-size: 26px;
-    font-weight: bold;
-    margin-top: 6px;
-}
-
-.blue { background: #1e3a8a; }
-.purple { background: #6d28d9; }
-.green { background: #065f46; }
-.orange { background: #92400e; }
-
-.table {
     background: #111827;
     border-radius: 14px;
-    padding: 14px;
-    margin-bottom: 20px;
-}
-
-.table h2 {
-    font-size: 16px;
+    padding: 12px;
     margin-bottom: 10px;
 }
-
-.table table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-}
-
-.table th, .table td {
-    padding: 8px 4px;
-    border-bottom: 1px solid #1f2937;
-    text-align: left;
-}
-
-.table th {
-    color: #9aa4b2;
-    font-weight: normal;
-}
-
-.help {
-    background: #0f172a;
-    border-radius: 14px;
-    padding: 14px;
-    font-size: 13px;
-}
-
-.help ol {
-    padding-left: 18px;
-}
-
-.help li {
-    margin-bottom: 6px;
-    color: #cbd5e1;
-}
+.small { font-size: 13px; color: #9aa4b2; }
 </style>
 </head>
 
 <body>
 <div class="container">
 
-<h1>💼 Зарплаты педагогов</h1>
-<div class="subtitle">
-Программа «Московское долголетие» — автоматизированный учёт
-</div>
+<h1>📄 DOCX-отчёт (МД)</h1>
 
-<div class="buttons">
-<button class="btn-green">📤 Загрузить DOCX</button>
-<button class="btn-blue">📅 Расписание</button>
-</div>
+<input type="month" id="monthPicker">
+<button onclick="buildReport()">Сформировать данные</button>
+<button onclick="exportDocx()">⬇️ Скачать DOCX</button>
 
-<div class="cards">
-<div class="card blue">Педагогов активных<span>3</span></div>
-<div class="card purple">Всего занятий<span>7</span></div>
-<div class="card green">Грант<span>1 960 ₽</span></div>
-<div class="card orange">Зарплаты<span>7 910 ₽</span></div>
-</div>
-
-<div class="table">
-<h2>📊 Детализация по педагогам</h2>
-<table>
-<tr>
-<th>Педагог</th>
-<th>Занятий</th>
-<th>Людей</th>
-<th>Зарплата</th>
-</tr>
-<tr>
-<td>Иванова</td>
-<td>3</td>
-<td>13</td>
-<td>3 390 ₽</td>
-</tr>
-<tr>
-<td>Петрова</td>
-<td>2</td>
-<td>8</td>
-<td>2 080 ₽</td>
-</tr>
-<tr>
-<td>Сидорова</td>
-<td>2</td>
-<td>6</td>
-<td>2 440 ₽</td>
-</tr>
-</table>
-</div>
-
-<div class="help">
-💡 <b>Как работать с системой</b>
-<ol>
-<li>Настройте расписание занятий</li>
-<li>Привяжите группы к дням</li>
-<li>Загрузите отчёт DOCX</li>
-<li>Занятия и зарплаты рассчитаются автоматически</li>
-</ol>
-</div>
+<div id="report"></div>
 
 </div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+
+let schedule = JSON.parse(localStorage.getItem("schedule")) || {};
+let reportData = [];
+
+document.getElementById("monthPicker").value =
+    new Date().toISOString().slice(0,7);
+
+function calculate(lesson) {
+    const grantPerPerson = 280;
+    const income = lesson.people * grantPerPerson;
+
+    let salary = 0;
+    if (lesson.salaryType === "fixed") salary = lesson.salaryValue;
+    if (lesson.salaryType === "perPerson") salary = lesson.people * lesson.salaryValue;
+    if (lesson.salaryType === "percent") salary = income * lesson.salaryValue / 100;
+
+    return { income, salary };
+}
+
+function buildReport() {
+    const month = document.getElementById("monthPicker").value;
+    const reportDiv = document.getElementById("report");
+    reportDiv.innerHTML = "";
+    reportData = [];
+
+    const teachers = {};
+
+    Object.keys(schedule).forEach(date => {
+        if (!date.startsWith(month)) return;
+
+        schedule[date].forEach(l => {
+            const c = calculate(l);
+            if (!teachers[l.teacher]) {
+                teachers[l.teacher] = {
+                    lessons: 0,
+                    people: 0,
+                    income: 0,
+                    salary: 0
+                };
+            }
+            teachers[l.teacher].lessons++;
+            teachers[l.teacher].people += l.people;
+            teachers[l.teacher].income += c.income;
+            teachers[l.teacher].salary += c.salary;
+        });
+    });
+
+    Object.entries(teachers).forEach(([teacher, d]) => {
+        reportData.push([teacher, d.lessons, d.people, d.income, d.salary]);
+
+        reportDiv.innerHTML += `
+        <div class="card">
+            <b>${teacher}</b><br>
+            <span class="small">
+            Занятий: ${d.lessons}<br>
+            Участников: ${d.people}<br>
+            Доход: ${d.income} ₽<br>
+            Зарплата: ${d.salary} ₽
+            </span>
+        </div>`;
+    });
+}
+
+async function exportDocx() {
+    if (reportData.length === 0) {
+        tg.showAlert("Сначала сформируйте отчёт");
+        return;
+    }
+
+    const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun } = docx;
+
+    const rows = [
+        new TableRow({
+            children: ["Педагог","Занятий","Участников","Доход","Зарплата"]
+            .map(t => new TableCell({ children: [new Paragraph({ text: t, bold: true })] }))
+        })
+    ];
+
+    reportData.forEach(r => {
+        rows.push(new TableRow({
+            children: r.map(v =>
+                new TableCell({ children: [new Paragraph(String(v))] })
+            )
+        }));
+    });
+
+    const doc = new Document({
+        sections: [{
+            children: [
+                new Paragraph({
+                    children: [new TextRun({
+                        text: "Отчёт по программе «Московское долголетие»",
+                        bold: true,
+                        size: 28
+                    })]
+                }),
+                new Paragraph(`Период: ${monthPicker.value}`),
+                new Paragraph(" "),
+                new Table({ rows })
+            ]
+        }]
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Отчет_МД_${monthPicker.value}.docx`;
+    link.click();
+}
+</script>
+
 </body>
 </html>
