@@ -1,17 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, Settings, BarChart3, FileDown, Trash2, Edit2, Save, X } from 'lucide-react';
+import { PlusCircle, Settings, BarChart3, FileDown, Trash2, Edit2, Save, X, Upload, Calendar } from 'lucide-react';
 
 const DanceSchoolTracker = () => {
   const [activeTab, setActiveTab] = useState('input');
   const [records, setRecords] = useState([]);
-  const [teachers, setTeachers] = useState([]);
-  const [groups, setGroups] = useState([]);
+  const [teachers, setTeachers] = useState([
+    { id: 1, name: 'Иванова А.П.', rate: 40 },
+    { id: 2, name: 'Петрова М.С.', rate: 40 }
+  ]);
+  const [groups, setGroups] = useState(['G-02250378', 'Группа 2', 'Группа 3', 'Группа 4']);
   const [expenses, setExpenses] = useState({
     rent: 50000,
     utilities: 10000,
     water: 2000,
     admin: 30000,
     paymentRate: 280
+  });
+  
+  // Быстрый ввод данных из отчета
+  const [quickInputData, setQuickInputData] = useState({
+    group: '',
+    teacher: '',
+    month: new Date().toISOString().slice(0, 7),
+    sessionDates: '',
+    totalVisits: '',
+    totalSessions: ''
   });
   
   const [formData, setFormData] = useState({
@@ -22,54 +35,124 @@ const DanceSchoolTracker = () => {
   });
   
   const [editingRecord, setEditingRecord] = useState(null);
+  const [editingTeacher, setEditingTeacher] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [filterTeacher, setFilterTeacher] = useState('all');
   const [filterGroup, setFilterGroup] = useState('all');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load data on mount
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
     try {
-      const recordsData = await window.storage.get('records');
-      const teachersData = await window.storage.get('teachers');
-      const groupsData = await window.storage.get('groups');
-      const expensesData = await window.storage.get('expenses');
-      
-      if (recordsData) setRecords(JSON.parse(recordsData.value));
-      if (teachersData) setTeachers(JSON.parse(teachersData.value));
-      if (groupsData) setGroups(JSON.parse(groupsData.value));
-      if (expensesData) setExpenses(JSON.parse(expensesData.value));
+      if (window.storage) {
+        const recordsData = await window.storage.get('dance_records');
+        const teachersData = await window.storage.get('dance_teachers');
+        const groupsData = await window.storage.get('dance_groups');
+        const expensesData = await window.storage.get('dance_expenses');
+        
+        if (recordsData && recordsData.value) {
+          setRecords(JSON.parse(recordsData.value));
+        }
+        if (teachersData && teachersData.value) {
+          setTeachers(JSON.parse(teachersData.value));
+        }
+        if (groupsData && groupsData.value) {
+          setGroups(JSON.parse(groupsData.value));
+        }
+        if (expensesData && expensesData.value) {
+          setExpenses(JSON.parse(expensesData.value));
+        }
+      }
     } catch (error) {
-      // Initialize with default data if no data exists
-      const defaultTeachers = [
-        { id: 1, name: 'Иванова А.П.', rate: 40 },
-        { id: 2, name: 'Петрова М.С.', rate: 40 }
-      ];
-      const defaultGroups = ['Группа 1', 'Группа 2', 'Группа 3', 'Группа 4'];
-      
-      setTeachers(defaultTeachers);
-      setGroups(defaultGroups);
-      await window.storage.set('teachers', JSON.stringify(defaultTeachers));
-      await window.storage.set('groups', JSON.stringify(defaultGroups));
-      await window.storage.set('expenses', JSON.stringify(expenses));
+      console.log('Загрузка:', error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const saveData = async () => {
-    await window.storage.set('records', JSON.stringify(records));
-    await window.storage.set('teachers', JSON.stringify(teachers));
-    await window.storage.set('groups', JSON.stringify(groups));
-    await window.storage.set('expenses', JSON.stringify(expenses));
+    try {
+      if (window.storage) {
+        await window.storage.set('dance_records', JSON.stringify(records));
+        await window.storage.set('dance_teachers', JSON.stringify(teachers));
+        await window.storage.set('dance_groups', JSON.stringify(groups));
+        await window.storage.set('dance_expenses', JSON.stringify(expenses));
+      }
+    } catch (error) {
+      console.log('Сохранение:', error.message);
+    }
   };
 
   useEffect(() => {
-    if (records.length > 0 || teachers.length > 0) {
+    if (!isLoading) {
       saveData();
     }
   }, [records, teachers, groups, expenses]);
+
+  // Быстрое добавление из отчета
+  const addQuickReport = () => {
+    if (!quickInputData.group || !quickInputData.teacher || !quickInputData.totalVisits || !quickInputData.totalSessions) {
+      alert('Заполните все обязательные поля');
+      return;
+    }
+
+    const totalVisits = parseInt(quickInputData.totalVisits);
+    const totalSessions = parseInt(quickInputData.totalSessions);
+    const avgPerSession = Math.round(totalVisits / totalSessions);
+
+    // Парсим даты из строки (например: "04.11, 06.11, 11.11")
+    let dates = [];
+    if (quickInputData.sessionDates.trim()) {
+      const dateStrings = quickInputData.sessionDates.split(',').map(d => d.trim());
+      const year = quickInputData.month.split('-')[0];
+      const month = quickInputData.month.split('-')[1];
+      
+      dates = dateStrings.map(dateStr => {
+        const day = dateStr.replace(/\D/g, '');
+        if (day.length >= 2) {
+          return `${year}-${month}-${day.padStart(2, '0')}`;
+        }
+        return null;
+      }).filter(d => d !== null);
+    }
+
+    // Если даты не указаны, создаем равномерное распределение по месяцу
+    if (dates.length === 0) {
+      const year = parseInt(quickInputData.month.split('-')[0]);
+      const month = parseInt(quickInputData.month.split('-')[1]) - 1;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const interval = Math.floor(daysInMonth / totalSessions);
+      
+      for (let i = 0; i < totalSessions; i++) {
+        const day = Math.min(1 + (i * interval), daysInMonth);
+        dates.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+      }
+    }
+
+    // Создаем записи для каждой даты
+    const newRecords = dates.slice(0, totalSessions).map((date, index) => ({
+      id: Date.now() + index,
+      group: quickInputData.group,
+      date: date,
+      teacher: quickInputData.teacher,
+      count: index < dates.length - 1 ? avgPerSession : (totalVisits - avgPerSession * (totalSessions - 1))
+    }));
+
+    setRecords([...records, ...newRecords]);
+    setQuickInputData({
+      group: '',
+      teacher: '',
+      month: new Date().toISOString().slice(0, 7),
+      sessionDates: '',
+      totalVisits: '',
+      totalSessions: ''
+    });
+    
+    alert(`Добавлено ${newRecords.length} записей`);
+  };
 
   const addRecord = () => {
     if (!formData.group || !formData.date || !formData.teacher || !formData.count) {
@@ -79,7 +162,9 @@ const DanceSchoolTracker = () => {
 
     const newRecord = {
       id: Date.now(),
-      ...formData,
+      group: formData.group,
+      date: formData.date,
+      teacher: formData.teacher,
       count: parseInt(formData.count)
     };
 
@@ -98,8 +183,53 @@ const DanceSchoolTracker = () => {
   };
 
   const deleteRecord = (id) => {
-    if (confirm('Удалить запись?')) {
+    if (window.confirm('Удалить запись?')) {
       setRecords(records.filter(r => r.id !== id));
+    }
+  };
+
+  const addTeacher = () => {
+    const name = window.prompt('Имя педагога:');
+    if (!name) return;
+    const rateStr = window.prompt('Ставка % (например, 40):');
+    if (!rateStr) return;
+    const rate = parseInt(rateStr);
+    if (isNaN(rate)) {
+      alert('Введите корректное число для ставки');
+      return;
+    }
+    setTeachers([...teachers, { id: Date.now(), name, rate }]);
+  };
+
+  const updateTeacher = () => {
+    setTeachers(teachers.map(t => t.id === editingTeacher.id ? editingTeacher : t));
+    setEditingTeacher(null);
+  };
+
+  const deleteTeacher = (id) => {
+    if (window.confirm('Удалить педагога?')) {
+      setTeachers(teachers.filter(t => t.id !== id));
+    }
+  };
+
+  const addGroup = () => {
+    const name = window.prompt('Название/код группы:');
+    if (name && !groups.includes(name)) {
+      setGroups([...groups, name]);
+    }
+  };
+
+  const updateGroup = (oldName) => {
+    const newName = window.prompt('Новое название группы:', oldName);
+    if (newName && newName !== oldName) {
+      setGroups(groups.map(g => g === oldName ? newName : g));
+      setRecords(records.map(r => r.group === oldName ? {...r, group: newName} : r));
+    }
+  };
+
+  const deleteGroup = (name) => {
+    if (window.confirm('Удалить группу?')) {
+      setGroups(groups.filter(g => g !== name));
     }
   };
 
@@ -123,12 +253,23 @@ const DanceSchoolTracker = () => {
           name: record.teacher,
           days: new Set(),
           totalVisits: 0,
-          records: []
+          records: [],
+          groupStats: {}
         };
       }
       byTeacher[record.teacher].days.add(record.date);
       byTeacher[record.teacher].totalVisits += record.count;
       byTeacher[record.teacher].records.push(record);
+      
+      // Статистика по группам
+      if (!byTeacher[record.teacher].groupStats[record.group]) {
+        byTeacher[record.teacher].groupStats[record.group] = {
+          sessions: 0,
+          visits: 0
+        };
+      }
+      byTeacher[record.teacher].groupStats[record.group].sessions++;
+      byTeacher[record.teacher].groupStats[record.group].visits += record.count;
     });
 
     return Object.values(byTeacher).map(t => {
@@ -138,11 +279,13 @@ const DanceSchoolTracker = () => {
       const salary = income * (rate / 100);
       
       return {
-        ...t,
+        name: t.name,
         workDays: t.days.size,
+        totalVisits: t.totalVisits,
         income,
         salary,
-        rate
+        rate,
+        groupStats: t.groupStats
       };
     });
   };
@@ -165,12 +308,25 @@ const DanceSchoolTracker = () => {
       csv += `${s.name},${s.workDays},${s.totalVisits},${s.income},${s.rate}%,${s.salary}\n`;
     });
 
+    csv += '\n\nДетали по группам\n';
+    csv += 'Педагог,Группа,Занятий,Посещений,Доход\n';
+    stats.forEach(s => {
+      Object.entries(s.groupStats).forEach(([group, data]) => {
+        const groupIncome = data.visits * expenses.paymentRate;
+        csv += `${s.name},${group},${data.sessions},${data.visits},${groupIncome}\n`;
+      });
+    });
+
     const totals = calculateTotals();
     csv += '\n\nИтоги\n';
     csv += `Общий доход,${totals.totalIncome}\n`;
     csv += `Зарплаты педагогов,${totals.totalSalaries}\n`;
+    csv += `Аренда зала,${expenses.rent}\n`;
+    csv += `Коммунальные,${expenses.utilities}\n`;
+    csv += `Вода,${expenses.water}\n`;
+    csv += `Администратор,${expenses.admin}\n`;
     csv += `Общие расходы,${totals.totalExpenses}\n`;
-    csv += `Чистая прибыль,${totals.netProfit}\n`;
+    csv += `Чистая прибыль компании,${totals.netProfit}\n`;
 
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -179,75 +335,206 @@ const DanceSchoolTracker = () => {
     link.click();
   };
 
-  const addTeacher = () => {
-    const name = prompt('Имя педагога:');
-    const rate = prompt('Ставка % (например, 40):');
-    if (name && rate) {
-      setTeachers([...teachers, { id: Date.now(), name, rate: parseInt(rate) }]);
-    }
-  };
-
-  const deleteTeacher = (id) => {
-    if (confirm('Удалить педагога?')) {
-      setTeachers(teachers.filter(t => t.id !== id));
-    }
-  };
-
-  const addGroup = () => {
-    const name = prompt('Название группы:');
-    if (name) {
-      setGroups([...groups, name]);
-    }
-  };
-
-  const deleteGroup = (name) => {
-    if (confirm('Удалить группу?')) {
-      setGroups(groups.filter(g => g !== name));
-    }
-  };
-
   const totals = calculateTotals();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
+        <div className="text-2xl text-purple-700">Загрузка...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-4">
       <div className="max-w-6xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <h1 className="text-3xl font-bold text-purple-700 mb-2">Московское долголетие</h1>
-          <p className="text-gray-600">Система учета танцевальной школы</p>
+          <p className="text-gray-600">Система учета танцевальной школы АНО "АФИНА"</p>
         </div>
 
         <div className="bg-white rounded-lg shadow-lg mb-6">
           <div className="flex border-b overflow-x-auto">
             <button
-              onClick={() => setActiveTab('input')}
-              className={`px-6 py-3 font-medium flex items-center gap-2 ${activeTab === 'input' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
+              onClick={() => setActiveTab('quick')}
+              className={`px-6 py-3 font-medium flex items-center gap-2 whitespace-nowrap ${activeTab === 'quick' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
             >
-              <PlusCircle size={20} /> Ввод данных
+              <Upload size={20} /> Быстрый ввод
+            </button>
+            <button
+              onClick={() => setActiveTab('input')}
+              className={`px-6 py-3 font-medium flex items-center gap-2 whitespace-nowrap ${activeTab === 'input' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
+            >
+              <Calendar size={20} /> По датам
             </button>
             <button
               onClick={() => setActiveTab('reports')}
-              className={`px-6 py-3 font-medium flex items-center gap-2 ${activeTab === 'reports' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
+              className={`px-6 py-3 font-medium flex items-center gap-2 whitespace-nowrap ${activeTab === 'reports' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
             >
               <BarChart3 size={20} /> Отчеты
             </button>
             <button
               onClick={() => setActiveTab('settings')}
-              className={`px-6 py-3 font-medium flex items-center gap-2 ${activeTab === 'settings' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
+              className={`px-6 py-3 font-medium flex items-center gap-2 whitespace-nowrap ${activeTab === 'settings' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
             >
               <Settings size={20} /> Настройки
             </button>
           </div>
 
           <div className="p-6">
+            {activeTab === 'quick' && (
+              <div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                  <h3 className="font-bold text-blue-900 mb-2">💡 Быстрый ввод из отчета</h3>
+                  <p className="text-sm text-blue-800">
+                    Введите данные из месячного отчета "Ведомость учета посещаемости". 
+                    Система автоматически создаст записи для всех занятий.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Код группы <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={quickInputData.group}
+                      onChange={(e) => setQuickInputData({...quickInputData, group: e.target.value})}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    >
+                      <option value="">Выберите группу</option>
+                      {groups.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Педагог <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={quickInputData.teacher}
+                      onChange={(e) => setQuickInputData({...quickInputData, teacher: e.target.value})}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    >
+                      <option value="">Выберите педагога</option>
+                      {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Месяц <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="month"
+                      value={quickInputData.month}
+                      onChange={(e) => setQuickInputData({...quickInputData, month: e.target.value})}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Всего занятий за месяц <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={quickInputData.totalSessions}
+                      onChange={(e) => setQuickInputData({...quickInputData, totalSessions: e.target.value})}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      placeholder="Например: 8"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Всего посещений за месяц <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={quickInputData.totalVisits}
+                      onChange={(e) => setQuickInputData({...quickInputData, totalVisits: e.target.value})}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      placeholder="Например: 208"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Даты занятий (необязательно)
+                    </label>
+                    <input
+                      type="text"
+                      value={quickInputData.sessionDates}
+                      onChange={(e) => setQuickInputData({...quickInputData, sessionDates: e.target.value})}
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      placeholder="04.11, 06.11, 11.11, 13.11..."
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Через запятую. Если не указано, распределится равномерно</p>
+                  </div>
+                </div>
+
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                  <h4 className="font-semibold text-green-900 mb-2">📊 Предпросмотр расчета</h4>
+                  {quickInputData.totalVisits && quickInputData.totalSessions ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-600">Занятий:</p>
+                        <p className="font-bold text-lg">{quickInputData.totalSessions}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Посещений:</p>
+                        <p className="font-bold text-lg">{quickInputData.totalVisits}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Среднее на занятие:</p>
+                        <p className="font-bold text-lg">
+                          {Math.round(parseInt(quickInputData.totalVisits) / parseInt(quickInputData.totalSessions))} чел
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Доход от государства:</p>
+                        <p className="font-bold text-lg text-green-600">
+                          {(parseInt(quickInputData.totalVisits) * expenses.paymentRate).toLocaleString('ru-RU')} ₽
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-600 text-sm">Заполните количество занятий и посещений для расчета</p>
+                  )}
+                </div>
+
+                <button
+                  onClick={addQuickReport}
+                  className="bg-purple-600 text-white px-8 py-3 rounded-lg hover:bg-purple-700 flex items-center gap-2 transition font-medium"
+                >
+                  <Upload size={20} /> Добавить отчет
+                </button>
+
+                <div className="mt-8 bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold mb-2">📋 Пример заполнения:</h4>
+                  <ul className="text-sm space-y-1 text-gray-700">
+                    <li>• <strong>Код группы:</strong> G-02250378</li>
+                    <li>• <strong>Педагог:</strong> Иванова А.П.</li>
+                    <li>• <strong>Месяц:</strong> 2025-11 (ноябрь 2025)</li>
+                    <li>• <strong>Всего занятий:</strong> 8</li>
+                    <li>• <strong>Всего посещений:</strong> 208</li>
+                    <li>• <strong>Даты:</strong> 04.11, 06.11, 11.11, 13.11, 18.11, 20.11, 25.11, 27.11</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
             {activeTab === 'input' && (
               <div>
+                <h3 className="text-lg font-bold mb-4">Ручной ввод по датам</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Группа</label>
                     <select
                       value={formData.group}
                       onChange={(e) => setFormData({...formData, group: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
                     >
                       <option value="">Выберите группу</option>
                       {groups.map(g => <option key={g} value={g}>{g}</option>)}
@@ -259,7 +546,7 @@ const DanceSchoolTracker = () => {
                       type="date"
                       value={formData.date}
                       onChange={(e) => setFormData({...formData, date: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
                     />
                   </div>
                   <div>
@@ -267,7 +554,7 @@ const DanceSchoolTracker = () => {
                     <select
                       value={formData.teacher}
                       onChange={(e) => setFormData({...formData, teacher: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
                     >
                       <option value="">Выберите педагога</option>
                       {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
@@ -279,20 +566,21 @@ const DanceSchoolTracker = () => {
                       type="number"
                       value={formData.count}
                       onChange={(e) => setFormData({...formData, count: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
                       placeholder="0"
+                      min="0"
                     />
                   </div>
                 </div>
                 <button
                   onClick={addRecord}
-                  className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2"
+                  className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2 transition"
                 >
                   <PlusCircle size={20} /> Добавить запись
                 </button>
 
                 <div className="mt-8">
-                  <h3 className="text-xl font-bold mb-4">Записи за текущий месяц</h3>
+                  <h3 className="text-xl font-bold mb-4">Все записи</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse">
                       <thead>
@@ -301,76 +589,83 @@ const DanceSchoolTracker = () => {
                           <th className="p-3 text-left">Группа</th>
                           <th className="p-3 text-left">Педагог</th>
                           <th className="p-3 text-left">Человек</th>
-                          <th className="p-3 text-left">Действия</th>
+                          <th className="p-3 text-center">Действия</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {records
-                          .filter(r => r.date.slice(0, 7) === new Date().toISOString().slice(0, 7))
-                          .sort((a, b) => new Date(b.date) - new Date(a.date))
-                          .map(record => (
-                            editingRecord?.id === record.id ? (
-                              <tr key={record.id} className="border-b">
-                                <td className="p-3">
-                                  <input
-                                    type="date"
-                                    value={editingRecord.date}
-                                    onChange={(e) => setEditingRecord({...editingRecord, date: e.target.value})}
-                                    className="p-1 border rounded"
-                                  />
-                                </td>
-                                <td className="p-3">
-                                  <select
-                                    value={editingRecord.group}
-                                    onChange={(e) => setEditingRecord({...editingRecord, group: e.target.value})}
-                                    className="p-1 border rounded"
-                                  >
-                                    {groups.map(g => <option key={g} value={g}>{g}</option>)}
-                                  </select>
-                                </td>
-                                <td className="p-3">
-                                  <select
-                                    value={editingRecord.teacher}
-                                    onChange={(e) => setEditingRecord({...editingRecord, teacher: e.target.value})}
-                                    className="p-1 border rounded"
-                                  >
-                                    {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                                  </select>
-                                </td>
-                                <td className="p-3">
-                                  <input
-                                    type="number"
-                                    value={editingRecord.count}
-                                    onChange={(e) => setEditingRecord({...editingRecord, count: parseInt(e.target.value)})}
-                                    className="p-1 border rounded w-20"
-                                  />
-                                </td>
-                                <td className="p-3">
-                                  <button onClick={updateRecord} className="text-green-600 hover:text-green-800 mr-2">
-                                    <Save size={18} />
-                                  </button>
-                                  <button onClick={() => setEditingRecord(null)} className="text-gray-600 hover:text-gray-800">
-                                    <X size={18} />
-                                  </button>
-                                </td>
-                              </tr>
-                            ) : (
-                              <tr key={record.id} className="border-b hover:bg-gray-50">
-                                <td className="p-3">{new Date(record.date).toLocaleDateString('ru-RU')}</td>
-                                <td className="p-3">{record.group}</td>
-                                <td className="p-3">{record.teacher}</td>
-                                <td className="p-3">{record.count}</td>
-                                <td className="p-3">
-                                  <button onClick={() => setEditingRecord(record)} className="text-blue-600 hover:text-blue-800 mr-2">
-                                    <Edit2 size={18} />
-                                  </button>
-                                  <button onClick={() => deleteRecord(record.id)} className="text-red-600 hover:text-red-800">
-                                    <Trash2 size={18} />
-                                  </button>
-                                </td>
-                              </tr>
-                            )
-                          ))}
+                        {records.length === 0 ? (
+                          <tr>
+                            <td colSpan="5" className="p-6 text-center text-gray-500">
+                              Нет записей. Используйте "Быстрый ввод" или добавьте вручную.
+                            </td>
+                          </tr>
+                        ) : (
+                          records
+                            .sort((a, b) => new Date(b.date) - new Date(a.date))
+                            .map(record => (
+                              editingRecord?.id === record.id ? (
+                                <tr key={record.id} className="border-b bg-blue-50">
+                                  <td className="p-3">
+                                    <input
+                                      type="date"
+                                      value={editingRecord.date}
+                                      onChange={(e) => setEditingRecord({...editingRecord, date: e.target.value})}
+                                      className="p-1 border rounded w-full"
+                                    />
+                                  </td>
+                                  <td className="p-3">
+                                    <select
+                                      value={editingRecord.group}
+                                      onChange={(e) => setEditingRecord({...editingRecord, group: e.target.value})}
+                                      className="p-1 border rounded w-full"
+                                    >
+                                      {groups.map(g => <option key={g} value={g}>{g}</option>)}
+                                    </select>
+                                  </td>
+                                  <td className="p-3">
+                                    <select
+                                      value={editingRecord.teacher}
+                                      onChange={(e) => setEditingRecord({...editingRecord, teacher: e.target.value})}
+                                      className="p-1 border rounded w-full"
+                                    >
+                                      {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                                    </select>
+                                  </td>
+                                  <td className="p-3">
+                                    <input
+                                      type="number"
+                                      value={editingRecord.count}
+                                      onChange={(e) => setEditingRecord({...editingRecord, count: parseInt(e.target.value) || 0})}
+                                      className="p-1 border rounded w-20"
+                                    />
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <button onClick={updateRecord} className="text-green-600 hover:text-green-800 mr-2" title="Сохранить">
+                                      <Save size={18} />
+                                    </button>
+                                    <button onClick={() => setEditingRecord(null)} className="text-gray-600 hover:text-gray-800" title="Отмена">
+                                      <X size={18} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ) : (
+                                <tr key={record.id} className="border-b hover:bg-gray-50">
+                                  <td className="p-3">{new Date(record.date).toLocaleDateString('ru-RU')}</td>
+                                  <td className="p-3">{record.group}</td>
+                                  <td className="p-3">{record.teacher}</td>
+                                  <td className="p-3">{record.count}</td>
+                                  <td className="p-3 text-center">
+                                    <button onClick={() => setEditingRecord(record)} className="text-blue-600 hover:text-blue-800 mr-2" title="Редактировать">
+                                      <Edit2 size={18} />
+                                    </button>
+                                    <button onClick={() => deleteRecord(record.id)} className="text-red-600 hover:text-red-800" title="Удалить">
+                                      <Trash2 size={18} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -387,7 +682,7 @@ const DanceSchoolTracker = () => {
                       type="month"
                       value={selectedMonth}
                       onChange={(e) => setSelectedMonth(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
                   </div>
                   <div>
@@ -395,7 +690,7 @@ const DanceSchoolTracker = () => {
                     <select
                       value={filterTeacher}
                       onChange={(e) => setFilterTeacher(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                     >
                       <option value="all">Все педагоги</option>
                       {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
@@ -406,7 +701,7 @@ const DanceSchoolTracker = () => {
                     <select
                       value={filterGroup}
                       onChange={(e) => setFilterGroup(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg"
+                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                     >
                       <option value="all">Все группы</option>
                       {groups.map(g => <option key={g} value={g}>{g}</option>)}
@@ -416,56 +711,90 @@ const DanceSchoolTracker = () => {
 
                 <button
                   onClick={exportToCSV}
-                  className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 mb-6"
+                  className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 mb-6 transition"
                 >
                   <FileDown size={20} /> Экспорт в CSV
                 </button>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-lg">
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-lg shadow-lg">
                     <p className="text-sm opacity-90 mb-1">Общий доход</p>
                     <p className="text-3xl font-bold">{totals.totalIncome.toLocaleString('ru-RU')} ₽</p>
+                    <p className="text-xs opacity-75 mt-1">от государства</p>
                   </div>
-                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-lg">
-                    <p className="text-sm opacity-90 mb-1">Зарплаты</p>
+                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-lg shadow-lg">
+                    <p className="text-sm opacity-90 mb-1">Зарплаты педагогов</p>
                     <p className="text-3xl font-bold">{totals.totalSalaries.toLocaleString('ru-RU')} ₽</p>
+                    <p className="text-xs opacity-75 mt-1">по ставкам</p>
                   </div>
-                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-6 rounded-lg">
-                    <p className="text-sm opacity-90 mb-1">Расходы</p>
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-6 rounded-lg shadow-lg">
+                    <p className="text-sm opacity-90 mb-1">Общие расходы</p>
                     <p className="text-3xl font-bold">{totals.totalExpenses.toLocaleString('ru-RU')} ₽</p>
+                    <p className="text-xs opacity-75 mt-1">аренда + услуги</p>
                   </div>
-                  <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-lg">
-                    <p className="text-sm opacity-90 mb-1">Чистая прибыль</p>
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-lg shadow-lg">
+                    <p className="text-sm opacity-90 mb-1">Прибыль компании</p>
                     <p className="text-3xl font-bold">{totals.netProfit.toLocaleString('ru-RU')} ₽</p>
+                    <p className="text-xs opacity-75 mt-1">чистая</p>
                   </div>
                 </div>
 
-                <h3 className="text-xl font-bold mb-4">Статистика по педагогам</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-purple-100">
-                        <th className="p-3 text-left">Педагог</th>
-                        <th className="p-3 text-left">Рабочих дней</th>
-                        <th className="p-3 text-left">Посещений</th>
-                        <th className="p-3 text-left">Доход</th>
-                        <th className="p-3 text-left">Ставка</th>
-                        <th className="p-3 text-left">Зарплата</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {totals.stats.map((stat, idx) => (
-                        <tr key={idx} className="border-b hover:bg-gray-50">
-                          <td className="p-3 font-medium">{stat.name}</td>
-                          <td className="p-3">{stat.workDays}</td>
-                          <td className="p-3">{stat.totalVisits}</td>
-                          <td className="p-3">{stat.income.toLocaleString('ru-RU')} ₽</td>
-                          <td className="p-3">{stat.rate}%</td>
-                          <td className="p-3 font-semibold text-green-600">{stat.salary.toLocaleString('ru-RU')} ₽</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <h3 className="text-xl font-bold mb-4">Детальный отчет по педагогам</h3>
+                <div className="space-y-6">
+                  {totals.stats.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">Нет данных за выбранный период</p>
+                  ) : (
+                    totals.stats.map((stat, idx) => (
+                      <div key={idx} className="bg-white border border-gray-200 rounded-lg p-6 shadow">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h4 className="text-xl font-bold text-gray-800">{stat.name}</h4>
+                            <p className="text-sm text-gray-600">Ставка: {stat.rate}%</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-green-600">{stat.salary.toLocaleString('ru-RU')} ₽</p>
+                            <p className="text-sm text-gray-600">зарплата</p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                          <div className="bg-blue-50 p-3 rounded">
+                            <p className="text-xs text-gray-600">Рабочих дней</p>
+                            <p className="text-2xl font-bold text-blue-700">{stat.workDays}</p>
+                          </div>
+                          <div className="bg-purple-50 p-3 rounded">
+                            <p className="text-xs text-gray-600">Всего посещений</p>
+                            <p className="text-2xl font-bold text-purple-700">{stat.totalVisits}</p>
+                          </div>
+                          <div className="bg-green-50 p-3 rounded">
+                            <p className="text-xs text-gray-600">Доход от гос-ва</p>
+                            <p className="text-2xl font-bold text-green-700">{stat.income.toLocaleString('ru-RU')} ₽</p>
+                          </div>
+                          <div className="bg-orange-50 p-3 rounded">
+                            <p className="text-xs text-gray-600">Прибыль компании</p>
+                            <p className="text-2xl font-bold text-orange-700">{(stat.income - stat.salary).toLocaleString('ru-RU')} ₽</p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <h5 className="font-semibold text-sm text-gray-700 mb-2">По группам:</h5>
+                          <div className="space-y-2">
+                            {Object.entries(stat.groupStats).map(([group, data]) => (
+                              <div key={group} className="flex justify-between items-center bg-gray-50 p-3 rounded">
+                                <span className="font-medium">{group}</span>
+                                <div className="text-right text-sm">
+                                  <span className="text-gray-600">{data.sessions} занятий • {data.visits} посещений</span>
+                                  <span className="ml-3 font-bold text-green-600">
+                                    {(data.visits * expenses.paymentRate).toLocaleString('ru-RU')} ₽
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -477,22 +806,52 @@ const DanceSchoolTracker = () => {
                     <h3 className="text-xl font-bold">Педагоги</h3>
                     <button
                       onClick={addTeacher}
-                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2"
+                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2 transition"
                     >
                       <PlusCircle size={18} /> Добавить
                     </button>
                   </div>
                   <div className="space-y-2">
                     {teachers.map(t => (
-                      <div key={t.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
-                        <div>
-                          <span className="font-medium">{t.name}</span>
-                          <span className="text-gray-600 ml-4">Ставка: {t.rate}%</span>
+                      editingTeacher?.id === t.id ? (
+                        <div key={t.id} className="flex gap-2 items-center bg-blue-50 p-3 rounded-lg">
+                          <input
+                            type="text"
+                            value={editingTeacher.name}
+                            onChange={(e) => setEditingTeacher({...editingTeacher, name: e.target.value})}
+                            className="flex-1 p-2 border rounded"
+                            placeholder="Имя"
+                          />
+                          <input
+                            type="number"
+                            value={editingTeacher.rate}
+                            onChange={(e) => setEditingTeacher({...editingTeacher, rate: parseInt(e.target.value) || 0})}
+                            className="w-20 p-2 border rounded"
+                            placeholder="%"
+                          />
+                          <button onClick={updateTeacher} className="text-green-600 hover:text-green-800" title="Сохранить">
+                            <Save size={20} />
+                          </button>
+                          <button onClick={() => setEditingTeacher(null)} className="text-gray-600 hover:text-gray-800" title="Отмена">
+                            <X size={20} />
+                          </button>
                         </div>
-                        <button onClick={() => deleteTeacher(t.id)} className="text-red-600 hover:text-red-800">
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
+                      ) : (
+                        <div key={t.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg hover:bg-gray-100">
+                          <div>
+                            <span className="font-medium">{t.name}</span>
+                            <span className="text-gray-600 ml-4">Ставка: {t.rate}%</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => setEditingTeacher(t)} className="text-blue-600 hover:text-blue-800" title="Редактировать">
+                              <Edit2 size={18} />
+                            </button>
+                            <button onClick={() => deleteTeacher(t.id)} className="text-red-600 hover:text-red-800" title="Удалить">
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      )
                     ))}
                   </div>
                 </div>
@@ -502,18 +861,23 @@ const DanceSchoolTracker = () => {
                     <h3 className="text-xl font-bold">Группы</h3>
                     <button
                       onClick={addGroup}
-                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2"
+                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2 transition"
                     >
                       <PlusCircle size={18} /> Добавить
                     </button>
                   </div>
                   <div className="space-y-2">
                     {groups.map(g => (
-                      <div key={g} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
+                      <div key={g} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg hover:bg-gray-100">
                         <span className="font-medium">{g}</span>
-                        <button onClick={() => deleteGroup(g)} className="text-red-600 hover:text-red-800">
-                          <Trash2 size={18} />
-                        </button>
+                        <div className="flex gap-2">
+                          <button onClick={() => updateGroup(g)} className="text-blue-600 hover:text-blue-800" title="Редактировать">
+                            <Edit2 size={18} />
+                          </button>
+                          <button onClick={() => deleteGroup(g)} className="text-red-600 hover:text-red-800" title="Удалить">
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -527,8 +891,8 @@ const DanceSchoolTracker = () => {
                       <input
                         type="number"
                         value={expenses.rent}
-                        onChange={(e) => setExpenses({...expenses, rent: parseInt(e.target.value)})}
-                        className="w-full p-2 border border-gray-300 rounded-lg"
+                        onChange={(e) => setExpenses({...expenses, rent: parseInt(e.target.value) || 0})}
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                       />
                     </div>
                     <div>
@@ -536,8 +900,8 @@ const DanceSchoolTracker = () => {
                       <input
                         type="number"
                         value={expenses.utilities}
-                        onChange={(e) => setExpenses({...expenses, utilities: parseInt(e.target.value)})}
-                        className="w-full p-2 border border-gray-300 rounded-lg"
+                        onChange={(e) => setExpenses({...expenses, utilities: parseInt(e.target.value) || 0})}
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                       />
                     </div>
                     <div>
@@ -545,8 +909,8 @@ const DanceSchoolTracker = () => {
                       <input
                         type="number"
                         value={expenses.water}
-                        onChange={(e) => setExpenses({...expenses, water: parseInt(e.target.value)})}
-                        className="w-full p-2 border border-gray-300 rounded-lg"
+                        onChange={(e) => setExpenses({...expenses, water: parseInt(e.target.value) || 0})}
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                       />
                     </div>
                     <div>
@@ -554,8 +918,8 @@ const DanceSchoolTracker = () => {
                       <input
                         type="number"
                         value={expenses.admin}
-                        onChange={(e) => setExpenses({...expenses, admin: parseInt(e.target.value)})}
-                        className="w-full p-2 border border-gray-300 rounded-lg"
+                        onChange={(e) => setExpenses({...expenses, admin: parseInt(e.target.value) || 0})}
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                       />
                     </div>
                     <div>
@@ -563,8 +927,8 @@ const DanceSchoolTracker = () => {
                       <input
                         type="number"
                         value={expenses.paymentRate}
-                        onChange={(e) => setExpenses({...expenses, paymentRate: parseInt(e.target.value)})}
-                        className="w-full p-2 border border-gray-300 rounded-lg"
+                        onChange={(e) => setExpenses({...expenses, paymentRate: parseInt(e.target.value) || 0})}
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                       />
                     </div>
                   </div>
