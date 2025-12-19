@@ -1,1222 +1,1168 @@
-import React, { useState, useEffect } from 'react';
-import { PlusCircle, Settings, BarChart3, FileDown, Trash2, Edit2, Save, X, Upload, Calendar } from 'lucide-react';
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TheGame — Учёт доходов</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white">
+  <div id="root"></div>
 
-const DanceSchoolTracker = () => {
-  const [activeTab, setActiveTab] = useState('input');
-  const [records, setRecords] = useState([]);
-  const [teachers, setTeachers] = useState([
-    { id: 1, name: 'Иванова А.П.', rate: 40 },
-    { id: 2, name: 'Петрова М.С.', rate: 40 }
-  ]);
-  const [groups, setGroups] = useState(['G-02250378', 'Группа 2', 'Группа 3', 'Группа 4']);
-  const [expenses, setExpenses] = useState({
-    rent: 50000,
-    utilities: 10000,
-    water: 2000,
-    admin: 30000,
-    paymentRate: 280
-  });
-  
-  // Быстрый ввод данных из отчета
-  const [quickInputData, setQuickInputData] = useState({
-    group: '',
-    teacher: '',
-    month: new Date().toISOString().slice(0, 7),
-    sessionDates: '',
-    totalVisits: '',
-    totalSessions: ''
-  });
-  
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  
-  const [formData, setFormData] = useState({
-    group: '',
-    date: new Date().toISOString().split('T')[0],
-    teacher: '',
-    count: ''
-  });
-  
-  const [editingRecord, setEditingRecord] = useState(null);
-  const [editingTeacher, setEditingTeacher] = useState(null);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [filterTeacher, setFilterTeacher] = useState('all');
-  const [filterGroup, setFilterGroup] = useState('all');
-  const [isLoading, setIsLoading] = useState(true);
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const tg = window.Telegram?.WebApp;
 
-  useEffect(() => {
-    loadData();
-  }, []);
+    // UI icons (simple)
+    const Icon = ({children}) => <span className="inline-block align-middle mr-2">{children}</span>;
 
-  const loadData = async () => {
-    try {
-      if (window.storage) {
-        const recordsData = await window.storage.get('dance_records');
-        const teachersData = await window.storage.get('dance_teachers');
-        const groupsData = await window.storage.get('dance_groups');
-        const expensesData = await window.storage.get('dance_expenses');
-        
-        if (recordsData && recordsData.value) {
-          setRecords(JSON.parse(recordsData.value));
-        }
-        if (teachersData && teachersData.value) {
-          setTeachers(JSON.parse(teachersData.value));
-        }
-        if (groupsData && groupsData.value) {
-          setGroups(JSON.parse(groupsData.value));
-        }
-        if (expensesData && expensesData.value) {
-          setExpenses(JSON.parse(expensesData.value));
-        }
-      }
-    } catch (error) {
-      console.log('Загрузка:', error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    function App() {
+      const [activeTab, setActiveTab] = useState('monthlyReport'); // default main
+      const [loading, setLoading] = useState(true);
 
-  const saveData = async () => {
-    try {
-      if (window.storage) {
-        await window.storage.set('dance_records', JSON.stringify(records));
-        await window.storage.set('dance_teachers', JSON.stringify(teachers));
-        await window.storage.set('dance_groups', JSON.stringify(groups));
-        await window.storage.set('dance_expenses', JSON.stringify(expenses));
-      }
-    } catch (error) {
-      console.log('Сохранение:', error.message);
-    }
-  };
+      // Data states
+      const [dolgo, setDolgo] = useState([]); // Московское долголетие (array of sessions)
+      const [individuals, setIndividuals] = useState([]); // индивидуалки (detailed)
+      const [rentals, setRentals] = useState([]); // аренда зала (income)
+      const [expenses, setExpenses] = useState([]); // постоянные расходы
+      const [passive, setPassive] = useState([]); // пассивный доход
+      const [students, setStudents] = useState([]); // база учеников
+      const [monthlyArchive, setMonthlyArchive] = useState([]); // по месяцам (архив)
 
-  useEffect(() => {
-    if (!isLoading) {
-      saveData();
-    }
-  }, [records, teachers, groups, expenses]);
+      // Modal form state
+      const [showModal, setShowModal] = useState(false);
+      const [modalType, setModalType] = useState(null);
+      const [editingIndex, setEditingIndex] = useState(null);
+      const [form, setForm] = useState({});
 
-  // Обработка загруженного файла
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    setUploadedFile(file);
-    setIsProcessing(true);
-    
-    try {
-      let text = '';
-      
-      // Обработка .docx файлов
-      if (file.name.endsWith('.docx')) {
-        const arrayBuffer = await file.arrayBuffer();
-        const mammoth = window.mammoth || await import('mammoth');
-        const result = await mammoth.extractRawText({ arrayBuffer });
-        text = result.value;
-      } 
-      // Обработка .txt и .doc (как текст)
-      else {
-        text = await file.text();
-      }
-      
-      console.log('Извлеченный текст:', text.substring(0, 500));
-      
-      // Извлекаем данные из текста
-      // Ищем код группы типа G-02250378
-      const groupMatch = text.match(/[GG][-\s]*\d{8}/i);
-      
-      // Ищем месяц и год
-      const monthMatch = text.match(/(январ[ья]|феврал[ья]|март[а]?|апрел[ья]|ма[йя]|июн[ья]|июл[ья]|август[а]?|сентябр[ья]|октябр[ья]|ноябр[ья]|декабр[ья])\s*,?\s*(\d{4})/i);
-      
-      // Ищем итоговое количество посещений (обычно в последних строках)
-      const visitsMatch = text.match(/Итого[^\d\n]*?(\d{1,4})\s*\d{1,4}/i) || 
-                          text.match(/всего[^\d]*?(\d{2,4})/i);
-      
-      // Ищем все даты в формате DD.MM
-      const allDatesMatches = text.matchAll(/(\d{2})\.(\d{2})/g);
-      const datesSet = new Set();
-      
-      for (const match of allDatesMatches) {
-        const day = match[1];
-        const month = match[2];
-        // Проверяем что это реальная дата (день 1-31, месяц 1-12)
-        if (parseInt(day) >= 1 && parseInt(day) <= 31 && 
-            parseInt(month) >= 1 && parseInt(month) <= 12) {
-          datesSet.add(`${day}.${month}`);
-        }
-      }
-      
-      const uniqueDates = Array.from(datesSet).sort();
-      
-      console.log('Найденная группа:', groupMatch?.[0]);
-      console.log('Найденный месяц:', monthMatch);
-      console.log('Найдено посещений:', visitsMatch?.[1]);
-      console.log('Найдены даты:', uniqueDates);
-      
-      // Заполняем форму
-      if (groupMatch) {
-        const groupCode = groupMatch[0].replace(/\s/g, '');
-        setQuickInputData(prev => ({...prev, group: groupCode}));
-      }
-      
-      if (monthMatch) {
-        const months = {
-          'январ': '01', 'феврал': '02', 'март': '03', 'апрел': '04',
-          'май': '05', 'ма': '05', 'июн': '06', 'июл': '07', 'август': '08',
-          'сентябр': '09', 'октябр': '10', 'ноябр': '11', 'декабр': '12'
-        };
-        const monthName = monthMatch[1].toLowerCase().replace(/[ья]$/, '');
-        const monthNum = months[monthName];
-        const year = monthMatch[2];
-        if (monthNum && year) {
-          setQuickInputData(prev => ({...prev, month: `${year}-${monthNum}`}));
-        }
-      }
-      
-      if (visitsMatch) {
-        const totalVisits = parseInt(visitsMatch[1]);
-        setQuickInputData(prev => ({...prev, totalVisits: totalVisits.toString()}));
-      }
-      
-      if (uniqueDates.length > 0) {
-        // Берем только уникальные даты (обычно это даты занятий в заголовках)
-        // Фильтруем даты которые повторяются слишком много раз (скорее всего это даты рождения)
-        const sessionDates = uniqueDates.slice(0, 15); // Максимум 15 занятий
-        
-        setQuickInputData(prev => ({
-          ...prev, 
-          sessionDates: sessionDates.join(', '),
-          totalSessions: sessionDates.length.toString()
-        }));
-      }
-      
-      alert('✅ Файл загружен!\n\n' +
-            'Автоматически заполнено:\n' +
-            (groupMatch ? `✓ Группа: ${groupMatch[0]}\n` : '') +
-            (monthMatch ? `✓ Месяц: ${monthMatch[1]} ${monthMatch[2]}\n` : '') +
-            (visitsMatch ? `✓ Посещений: ${visitsMatch[1]}\n` : '') +
-            (uniqueDates.length ? `✓ Дат занятий: ${uniqueDates.length}\n\n` : '') +
-            'Проверьте данные и выберите педагога!');
-      
-    } catch (error) {
-      console.error('Ошибка обработки файла:', error);
-      alert('⚠️ Не удалось автоматически извлечь данные из файла.\n\n' +
-            'Возможные причины:\n' +
-            '• Файл поврежден\n' +
-            '• Неподдерживаемый формат\n\n' +
-            'Попробуйте заполнить поля вручную.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Быстрое добавление из отчета
-  const addQuickReport = () => {
-    console.log('Функция addQuickReport вызвана');
-    console.log('Текущие данные:', quickInputData);
-    
-    // Проверка полей
-    if (!quickInputData.group) {
-      alert('❌ Выберите группу');
-      return;
-    }
-    
-    if (!quickInputData.teacher) {
-      alert('❌ Выберите педагога');
-      return;
-    }
-    
-    if (!quickInputData.totalSessions) {
-      alert('❌ Введите количество занятий');
-      return;
-    }
-    
-    if (!quickInputData.totalVisits) {
-      alert('❌ Введите количество посещений');
-      return;
-    }
-
-    const totalVisits = parseInt(quickInputData.totalVisits);
-    const totalSessions = parseInt(quickInputData.totalSessions);
-    
-    console.log('Посещений:', totalVisits, 'Занятий:', totalSessions);
-    
-    if (isNaN(totalVisits) || isNaN(totalSessions) || totalVisits <= 0 || totalSessions <= 0) {
-      alert('❌ Введите корректные числа');
-      return;
-    }
-
-    const avgPerSession = Math.round(totalVisits / totalSessions);
-    console.log('Среднее на занятие:', avgPerSession);
-
-    // Парсим даты
-    let dates = [];
-    const year = quickInputData.month.split('-')[0];
-    const month = quickInputData.month.split('-')[1];
-    
-    if (quickInputData.sessionDates.trim()) {
-      const dateStrings = quickInputData.sessionDates.split(',');
-      console.log('Парсим даты:', dateStrings);
-      
-      for (let dateStr of dateStrings) {
-        const cleaned = dateStr.trim();
-        const dayMatch = cleaned.match(/(\d{1,2})/);
-        if (dayMatch) {
-          const day = dayMatch[1].padStart(2, '0');
-          dates.push(`${year}-${month}-${day}`);
-        }
-      }
-    }
-    
-    console.log('Распарсенные даты:', dates);
-
-    // Если дат недостаточно, добавляем
-    while (dates.length < totalSessions) {
-      const yearNum = parseInt(year);
-      const monthNum = parseInt(month) - 1;
-      const daysInMonth = new Date(yearNum, monthNum + 1, 0).getDate();
-      const day = Math.min(dates.length + 1, daysInMonth);
-      dates.push(`${year}-${month}-${String(day).padStart(2, '0')}`);
-    }
-
-    // Создаем записи
-    const newRecords = [];
-    let remainingVisits = totalVisits;
-    
-    for (let i = 0; i < totalSessions; i++) {
-      const count = i < totalSessions - 1 ? avgPerSession : remainingVisits;
-      remainingVisits -= count;
-      
-      newRecords.push({
-        id: Date.now() + i,
-        group: quickInputData.group,
-        date: dates[i] || dates[0],
-        teacher: quickInputData.teacher,
-        count: count
-      });
-    }
-    
-    console.log('Создано записей:', newRecords);
-
-    try {
-      setRecords([...records, ...newRecords]);
-      console.log('Записи добавлены в state');
-      
-      setQuickInputData({
-        group: '',
-        teacher: '',
-        month: new Date().toISOString().slice(0, 7),
-        sessionDates: '',
-        totalVisits: '',
-        totalSessions: ''
-      });
-      
-      alert(`✅ Добавлено ${newRecords.length} записей! Перейдите во вкладку "По датам" чтобы увидеть их.`);
-      setActiveTab('input');
-    } catch (error) {
-      console.error('Ошибка:', error);
-      alert('❌ Ошибка при добавлении: ' + error.message);
-    }
-  };
-
-  const addRecord = () => {
-    if (!formData.group || !formData.date || !formData.teacher || !formData.count) {
-      alert('Заполните все поля');
-      return;
-    }
-
-    const newRecord = {
-      id: Date.now(),
-      group: formData.group,
-      date: formData.date,
-      teacher: formData.teacher,
-      count: parseInt(formData.count)
-    };
-
-    setRecords([...records, newRecord]);
-    setFormData({
-      group: '',
-      date: new Date().toISOString().split('T')[0],
-      teacher: '',
-      count: ''
-    });
-  };
-
-  const updateRecord = () => {
-    setRecords(records.map(r => r.id === editingRecord.id ? editingRecord : r));
-    setEditingRecord(null);
-  };
-
-  const deleteRecord = (id) => {
-    if (window.confirm('Удалить запись?')) {
-      setRecords(records.filter(r => r.id !== id));
-    }
-  };
-
-  const addTeacher = () => {
-    const name = window.prompt('Имя педагога:');
-    if (!name) return;
-    const rateStr = window.prompt('Ставка % (например, 40):');
-    if (!rateStr) return;
-    const rate = parseInt(rateStr);
-    if (isNaN(rate)) {
-      alert('Введите корректное число для ставки');
-      return;
-    }
-    setTeachers([...teachers, { id: Date.now(), name, rate }]);
-  };
-
-  const updateTeacher = () => {
-    setTeachers(teachers.map(t => t.id === editingTeacher.id ? editingTeacher : t));
-    setEditingTeacher(null);
-  };
-
-  const deleteTeacher = (id) => {
-    if (window.confirm('Удалить педагога?')) {
-      setTeachers(teachers.filter(t => t.id !== id));
-    }
-  };
-
-  const addGroup = () => {
-    const name = window.prompt('Название/код группы:');
-    if (name && !groups.includes(name)) {
-      setGroups([...groups, name]);
-    }
-  };
-
-  const updateGroup = (oldName) => {
-    const newName = window.prompt('Новое название группы:', oldName);
-    if (newName && newName !== oldName) {
-      setGroups(groups.map(g => g === oldName ? newName : g));
-      setRecords(records.map(r => r.group === oldName ? {...r, group: newName} : r));
-    }
-  };
-
-  const deleteGroup = (name) => {
-    if (window.confirm('Удалить группу?')) {
-      setGroups(groups.filter(g => g !== name));
-    }
-  };
-
-  const getFilteredRecords = () => {
-    return records.filter(r => {
-      const recordMonth = r.date.slice(0, 7);
-      const matchMonth = recordMonth === selectedMonth;
-      const matchTeacher = filterTeacher === 'all' || r.teacher === filterTeacher;
-      const matchGroup = filterGroup === 'all' || r.group === filterGroup;
-      return matchMonth && matchTeacher && matchGroup;
-    });
-  };
-
-  const calculateStats = () => {
-    const filtered = getFilteredRecords();
-    const byTeacher = {};
-
-    filtered.forEach(record => {
-      if (!byTeacher[record.teacher]) {
-        byTeacher[record.teacher] = {
-          name: record.teacher,
-          days: new Set(),
-          totalVisits: 0,
-          records: [],
-          groupStats: {}
-        };
-      }
-      byTeacher[record.teacher].days.add(record.date);
-      byTeacher[record.teacher].totalVisits += record.count;
-      byTeacher[record.teacher].records.push(record);
-      
-      // Статистика по группам
-      if (!byTeacher[record.teacher].groupStats[record.group]) {
-        byTeacher[record.teacher].groupStats[record.group] = {
-          sessions: 0,
-          visits: 0
-        };
-      }
-      byTeacher[record.teacher].groupStats[record.group].sessions++;
-      byTeacher[record.teacher].groupStats[record.group].visits += record.count;
-    });
-
-    return Object.values(byTeacher).map(t => {
-      const teacher = teachers.find(te => te.name === t.name);
-      const rate = teacher ? teacher.rate : 40;
-      const income = t.totalVisits * expenses.paymentRate;
-      const salary = income * (rate / 100);
-      
-      return {
-        name: t.name,
-        workDays: t.days.size,
-        totalVisits: t.totalVisits,
-        income,
-        salary,
-        rate,
-        groupStats: t.groupStats
+      // Locations and default hall expense mapping per spec
+      const locationDefaults = {
+        "Буденного": 0,
+        "Черкизовская": 0, // оплачивают педагоги
+        "Парк": 0
       };
-    });
-  };
 
-  const calculateTotals = () => {
-    const stats = calculateStats();
-    const totalIncome = stats.reduce((sum, t) => sum + t.income, 0);
-    const totalSalaries = stats.reduce((sum, t) => sum + t.salary, 0);
-    const totalExpenses = expenses.rent + expenses.utilities + expenses.water + expenses.admin;
-    const netProfit = totalIncome - totalSalaries - totalExpenses;
+      // Persist/load helpers (Telegram CloudStorage if available, else localStorage)
+      const loadKey = async (key, fallback) => {
+        try {
+          if (tg?.CloudStorage) {
+            return await new Promise((resolve) => {
+              tg.CloudStorage.getItem(key, (err, val) => {
+                if (!err && val) {
+                  try { resolve(JSON.parse(val)); } catch { resolve(fallback); }
+                } else resolve(fallback);
+              });
+            });
+          } else {
+            const raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : fallback;
+          }
+        } catch {
+          return fallback;
+        }
+      };
 
-    return { totalIncome, totalSalaries, totalExpenses, netProfit, stats };
-  };
+      const saveKey = async (key, data) => {
+        try {
+          const val = JSON.stringify(data);
+          if (tg?.CloudStorage) tg.CloudStorage.setItem(key, val);
+          localStorage.setItem(key, val);
+        } catch (e) {
+          console.error('saveKey error', e);
+        }
+      };
 
-  const exportToCSV = () => {
-    const stats = calculateStats();
-    let csv = 'Педагог,Рабочих дней,Всего посещений,Доход от гос-ва,Ставка %,Зарплата\n';
-    
-    stats.forEach(s => {
-      csv += `${s.name},${s.workDays},${s.totalVisits},${s.income},${s.rate}%,${s.salary}\n`;
-    });
+      useEffect(() => {
+        (async () => {
+          const [
+            _dolgo, _ind, _rent, _exp, _pass, _stud, _arch
+          ] = await Promise.all([
+            loadKey('dolgo', []),
+            loadKey('individuals', []),
+            loadKey('rentals', []),
+            loadKey('expenses', []),
+            loadKey('passive', []),
+            loadKey('students', []),
+            loadKey('monthlyArchive', [])
+          ]);
+          setDolgo(_dolgo);
+          setIndividuals(_ind);
+          setRentals(_rent);
+          setExpenses(_exp);
+          setPassive(_pass);
+          setStudents(_stud);
+          setMonthlyArchive(_arch);
+          setLoading(false);
+          try { tg?.expand && tg.expand(); } catch {}
+        })();
+      }, []);
 
-    csv += '\n\nДетали по группам\n';
-    csv += 'Педагог,Группа,Занятий,Посещений,Доход\n';
-    stats.forEach(s => {
-      Object.entries(s.groupStats).forEach(([group, data]) => {
-        const groupIncome = data.visits * expenses.paymentRate;
-        csv += `${s.name},${group},${data.sessions},${data.visits},${groupIncome}\n`;
+      // Autosave
+      useEffect(()=> { if(!loading) saveKey('dolgo', dolgo); }, [dolgo]);
+      useEffect(()=> { if(!loading) saveKey('individuals', individuals); }, [individuals]);
+      useEffect(()=> { if(!loading) saveKey('rentals', rentals); }, [rentals]);
+      useEffect(()=> { if(!loading) saveKey('expenses', expenses); }, [expenses]);
+      useEffect(()=> { if(!loading) saveKey('passive', passive); }, [passive]);
+      useEffect(()=> { if(!loading) saveKey('students', students); }, [students]);
+      useEffect(()=> { if(!loading) saveKey('monthlyArchive', monthlyArchive); }, [monthlyArchive]);
+
+      // Helpers: format
+      const fmt = (n) => new Intl.NumberFormat('ru-RU').format(Number(n || 0));
+
+      // Business logic calculations
+      // For "Долголетие" row: income = people * 280
+      // teacher expense depends on rate selection:
+      // '50%' => income * 0.5
+      // '700' => 700
+      // '1000' => 1000
+      // '100%' => income * 1.0
+      const calcTeacherExpense = (income, rate) => {
+        if (!rate) return 0;
+        if (rate === '50%') return Math.round(income * 0.5);
+        if (rate === '700') return 700;
+        if (rate === '1000') return 1000;
+        if (rate === '100%') return Math.round(income * 1.0);
+        // fallback numeric
+        const parsed = parseFloat(rate);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+
+      // Totals per section
+      const totalDolgoIncome = dolgo.reduce((s,r)=> s + (Number(r.income)||0), 0);
+      const totalDolgoTeacherExpense = dolgo.reduce((s,r)=> s + calcTeacherExpense(Number(r.income)||0, r.rate), 0);
+      const totalDolgoHallExpense = dolgo.reduce((s,r)=> s + (Number(r.hallExpense)||0), 0);
+      const totalDolgoProfit = totalDolgoIncome - totalDolgoTeacherExpense - totalDolgoHallExpense;
+
+      const totalIndividualIncome = individuals.reduce((s,r)=> s + (Number(r.amount)||0), 0);
+      const totalRentalsIncome = rentals.reduce((s,r)=> s + (Number(r.amount)||0), 0);
+      const totalPassiveIncome = passive.reduce((s,r)=> s + (Number(r.monthly)||0), 0);
+      const totalExpenses = expenses.reduce((s,r)=> s + (Number(r.amount)||0), 0);
+
+      // Monthly report aggregation: categories per spec
+      const monthlyReport = [
+        { category: 'Московское долголетие', income: totalDolgoIncome, expense: totalDolgoTeacherExpense + totalDolgoHallExpense, profit: totalDolgoProfit },
+        { category: 'Индивидуальные уроки', income: totalIndividualIncome, expense: 0, profit: totalIndividualIncome },
+        { category: 'Аренда зала', income: totalRentalsIncome, expense: 0, profit: totalRentalsIncome },
+        { category: 'Пассивный', income: totalPassiveIncome, expense: 0, profit: totalPassiveIncome },
+        { category: 'Расходы', income: 0, expense: totalExpenses, profit: -totalExpenses },
+      ];
+      const totalReportIncome = monthlyReport.reduce((s,r)=> s + (r.income||0), 0);
+      const totalReportExpense = monthlyReport.reduce((s,r)=> s + (r.expense||0), 0);
+      const totalReportProfit = monthlyReport.reduce((s,r)=> s + (r.profit||0), 0);
+
+      // Analytics: top teachers/clubs by profit (build mapping)
+      // We'll aggregate profit per teacher/club from dolgo and individuals:
+      const profitMap = {};
+      dolgo.forEach(r=>{
+        const profit = (Number(r.income)||0) - calcTeacherExpense(Number(r.income)||0, r.rate) - (Number(r.hallExpense)||0);
+        const name = r.teacher || r.location || 'Без имени';
+        profitMap[name] = (profitMap[name]||0) + profit;
       });
-    });
+      // treat rentals as club profit (renter name)
+      rentals.forEach(r=>{
+        const name = r.name || 'Аренда';
+        profitMap[name] = (profitMap[name]||0) + (Number(r.amount)||0);
+      });
+      // individuals: attribute to 'Индивидуалки' or client? We'll group under 'Индивидуалки' and by teacher if present
+      individuals.forEach(r=>{
+        const teacher = r.teacher || 'Индивидуалки';
+        profitMap[teacher] = (profitMap[teacher]||0) + (Number(r.amount)||0);
+      });
 
-    const totals = calculateTotals();
-    csv += '\n\nИтоги\n';
-    csv += `Общий доход,${totals.totalIncome}\n`;
-    csv += `Зарплаты педагогов,${totals.totalSalaries}\n`;
-    csv += `Аренда зала,${expenses.rent}\n`;
-    csv += `Коммунальные,${expenses.utilities}\n`;
-    csv += `Вода,${expenses.water}\n`;
-    csv += `Администратор,${expenses.admin}\n`;
-    csv += `Общие расходы,${totals.totalExpenses}\n`;
-    csv += `Чистая прибыль компании,${totals.netProfit}\n`;
+      const topList = Object.entries(profitMap)
+        .map(([key,val])=> ({name:key, profit: Math.round(val)}))
+        .sort((a,b)=> b.profit - a.profit)
+        .slice(0,10);
+      const topTotal = topList.reduce((s,r)=> s + r.profit, 0);
+      const topWithShare = topList.map(t=> ({...t, share: topTotal ? Math.round((t.profit / topTotal)*100) : 0}));
 
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `отчет_${selectedMonth}.csv`;
-    link.click();
-  };
+      // Students stats
+      const totalStudents = students.length;
+      const activeStudents = students.filter(s=> s.status === 'Активный').length;
+      const avgIncomePerStudent = totalStudents ? Math.round((totalReportProfit + totalIndividualIncome + totalPassiveIncome - totalExpenses) / totalStudents) : 0;
 
-  const totals = calculateTotals();
+      // Progress to 1M (per spec, initial 385,000 is starting amount - but better compute from current profit sum)
+      const baseStart = 385000;
+      const currentTotal = baseStart + (totalReportProfit); // simple approach
+      const goal = 1000000;
+      const progressPercent = Math.round((currentTotal / goal) * 100);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
-        <div className="text-2xl text-purple-700">Загрузка...</div>
-      </div>
-    );
-  }
+      // Modal open
+      const openModal = (type, idx = null) => {
+        setModalType(type);
+        setEditingIndex(idx);
+        let data = {};
+        if (idx !== null) {
+          if (type === 'dolgo') data = {...dolgo[idx]};
+          if (type === 'individual') data = {...individuals[idx]};
+          if (type === 'rental') data = {...rentals[idx]};
+          if (type === 'expense') data = {...expenses[idx]};
+          if (type === 'passive') data = {...passive[idx]};
+          if (type === 'student') data = {...students[idx]};
+          if (type === 'archive') data = {...monthlyArchive[idx]};
+        } else {
+          // default empty
+          data = {};
+        }
+        setForm(data);
+        setShowModal(true);
+      };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h1 className="text-3xl font-bold text-purple-700 mb-2">Московское долголетие</h1>
-          <p className="text-gray-600">Система учета танцевальной школы АНО "АФИНА"</p>
-        </div>
+      const closeModal = () => { setShowModal(false); setForm({}); setEditingIndex(null); setModalType(null); };
 
-        <div className="bg-white rounded-lg shadow-lg mb-6">
-          <div className="flex border-b overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('quick')}
-              className={`px-6 py-3 font-medium flex items-center gap-2 whitespace-nowrap ${activeTab === 'quick' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
-            >
-              <Upload size={20} /> Быстрый ввод
-            </button>
-            <button
-              onClick={() => setActiveTab('input')}
-              className={`px-6 py-3 font-medium flex items-center gap-2 whitespace-nowrap ${activeTab === 'input' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
-            >
-              <Calendar size={20} /> По датам
-            </button>
-            <button
-              onClick={() => setActiveTab('reports')}
-              className={`px-6 py-3 font-medium flex items-center gap-2 whitespace-nowrap ${activeTab === 'reports' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
-            >
-              <BarChart3 size={20} /> Отчеты
-            </button>
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`px-6 py-3 font-medium flex items-center gap-2 whitespace-nowrap ${activeTab === 'settings' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'}`}
-            >
-              <Settings size={20} /> Настройки
-            </button>
-          </div>
+      // Save modal data
+      const saveModal = () => {
+        if (modalType === 'dolgo') {
+          // required fields: date, location, teacher, rate, people, hallExpense (editable)
+          const people = Number(form.people || 0);
+          const income = people * 280;
+          const row = {
+            date: form.date || '',
+            location: form.location || '',
+            teacher: form.teacher || '',
+            rate: form.rate || '50%',
+            people,
+            income,
+            hallExpense: Number(form.hallExpense || locationDefaults[form.location] || 0),
+            comment: form.comment || ''
+          };
+          if (editingIndex !== null) {
+            const copy = [...dolgo]; copy[editingIndex] = row; setDolgo(copy);
+          } else {
+            setDolgo([...dolgo, row]);
+          }
+        }
+        if (modalType === 'individual') {
+          const row = {
+            date: form.date || '',
+            type: form.type || 'Остальные',
+            client: form.client || '',
+            teacher: form.teacher || '',
+            amount: Number(form.amount || 0),
+            comment: form.comment || ''
+          };
+          if (editingIndex !== null) {
+            const copy = [...individuals]; copy[editingIndex] = row; setIndividuals(copy);
+          } else setIndividuals([...individuals, row]);
+        }
+        if (modalType === 'rental') {
+          const row = {
+            date: form.date || '',
+            name: form.name || '',
+            amount: Number(form.amount || 0),
+            comment: form.comment || ''
+          };
+          if (editingIndex !== null) { const copy=[...rentals]; copy[editingIndex]=row; setRentals(copy); }
+          else setRentals([...rentals, row]);
+        }
+        if (modalType === 'expense') {
+          const row = {
+            date: form.date || '',
+            type: form.type || '',
+            what: form.what || '',
+            amount: Number(form.amount || 0),
+            comment: form.comment || ''
+          };
+          if (editingIndex !== null) { const copy=[...expenses]; copy[editingIndex]=row; setExpenses(copy); }
+          else setExpenses([...expenses, row]);
+        }
+        if (modalType === 'passive') {
+          const row = {
+            date: form.date || '',
+            source: form.source || '',
+            monthly: Number(form.monthly || 0),
+            comment: form.comment || ''
+          };
+          if (editingIndex !== null) { const copy=[...passive]; copy[editingIndex]=row; setPassive(copy); }
+          else setPassive([...passive, row]);
+        }
+        if (modalType === 'student') {
+          const row = {
+            name: form.name || '',
+            phone: form.phone || '',
+            group: form.group || '',
+            subscription: form.subscription || '',
+            expiry: form.expiry || '',
+            status: form.status || 'Активный',
+            note: form.note || ''
+          };
+          if (editingIndex !== null) { const copy=[...students]; copy[editingIndex]=row; setStudents(copy); }
+          else setStudents([...students, row]);
+        }
+        if (modalType === 'archive') {
+          const groupIncome = Number(form.groupIncome||0);
+          const individualIncome = Number(form.individualIncome||0);
+          const passiveIncome = Number(form.passiveIncome||0);
+          const expensesVal = Number(form.expenses||0);
+          const profit = groupIncome + individualIncome + passiveIncome - expensesVal;
+          const row = {
+            month: form.month || '',
+            year: form.year || '',
+            groupIncome, individualIncome, passiveIncome,
+            expenses: expensesVal,
+            profit,
+            note: form.note || ''
+          };
+          if (editingIndex !== null) { const copy=[...monthlyArchive]; copy[editingIndex]=row; setMonthlyArchive(copy); }
+          else setMonthlyArchive([...monthlyArchive, row]);
+        }
 
-          <div className="p-6">
-            {activeTab === 'quick' && (
-              <div>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                  <h3 className="font-bold text-blue-900 mb-2">💡 Быстрый ввод из отчета</h3>
-                  <p className="text-sm text-blue-800">
-                    Загрузите файл отчета или заполните поля вручную
-                  </p>
+        closeModal();
+      };
+
+      const deleteItem = (type, idx) => {
+        if (!confirm('Удалить запись?')) return;
+        if (type === 'dolgo') setDolgo(dolgo.filter((_,i)=>i!==idx));
+        if (type === 'individual') setIndividuals(individuals.filter((_,i)=>i!==idx));
+        if (type === 'rental') setRentals(rentals.filter((_,i)=>i!==idx));
+        if (type === 'expense') setExpenses(expenses.filter((_,i)=>i!==idx));
+        if (type === 'passive') setPassive(passive.filter((_,i)=>i!==idx));
+        if (type === 'student') setStudents(students.filter((_,i)=>i!==idx));
+        if (type === 'archive') setMonthlyArchive(monthlyArchive.filter((_,i)=>i!==idx));
+      };
+
+      const exportCSV = () => {
+        let csv = 'Категория,Доход,Расход,Прибыль\n';
+        monthlyReport.forEach(row=>{
+          csv += `${row.category},${row.income},${row.expense},${row.profit}\n`;
+        });
+        csv += `\nИТОГО,${totalReportIncome},${totalReportExpense},${totalReportProfit}\n`;
+        // create and download
+        const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'thegame_monthly_report.csv'; a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      if (loading) {
+        return <div className="min-h-screen flex items-center justify-center"><div>Загрузка...</div></div>;
+      }
+
+      // UI components (kept inline but organized)
+      return (
+        <div className="min-h-screen p-4">
+          <div className="max-w-6xl mx-auto">
+            <header className="mb-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold">💰 TheGame — Учёт доходов</h1>
+                  <div className="text-sm text-slate-400">Путь к 1М</div>
                 </div>
-
-                {/* Загрузка файла */}
-                <div className="mb-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border-2 border-dashed border-purple-300">
-                  <label className="block cursor-pointer">
-                    <div className="text-center">
-                      <Upload size={48} className="mx-auto mb-3 text-purple-600" />
-                      <h4 className="text-lg font-bold text-gray-800 mb-2">
-                        {uploadedFile ? '✅ ' + uploadedFile.name : '📄 Загрузить отчет Word'}
-                      </h4>
-                      <p className="text-sm text-gray-600 mb-3">
-                        {uploadedFile 
-                          ? 'Нажмите для выбора другого файла' 
-                          : 'Автоматически извлечет данные из ведомости'}
-                      </p>
-                      <div className="bg-purple-600 text-white px-6 py-3 rounded-lg inline-block hover:bg-purple-700 active:bg-purple-800 transition font-medium">
-                        {isProcessing ? '⏳ Обработка...' : '📁 Выбрать файл DOCX'}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-3">
-                        Поддерживаются: .docx, .doc, .txt
-                      </p>
+                <div className="text-right">
+                  <div className="text-sm text-slate-400">Прогресс к цели</div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-56 bg-slate-700 h-4 rounded">
+                      <div className="h-4 rounded bg-gradient-to-r from-blue-500 to-green-400" style={{width: `${Math.min(progressPercent,100)}%`}}></div>
                     </div>
-                    <input
-                      type="file"
-                      accept=".doc,.docx,.txt"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      disabled={isProcessing}
-                    />
-                  </label>
-                </div>
-
-                <div className="border-t-2 border-gray-200 my-6 pt-6">
-                  <h4 className="font-semibold text-gray-700 mb-4">Проверьте и заполните данные:</h4>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Код группы <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      list="groups-list"
-                      value={quickInputData.group}
-                      onChange={(e) => setQuickInputData({...quickInputData, group: e.target.value})}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
-                      placeholder="G-02250378 или выберите"
-                    />
-                    <datalist id="groups-list">
-                      {groups.map(g => <option key={g} value={g}>{g}</option>)}
-                    </datalist>
+                    <div className="text-sm font-bold">{progressPercent}%</div>
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Педагог <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={quickInputData.teacher}
-                      onChange={(e) => setQuickInputData({...quickInputData, teacher: e.target.value})}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
-                    >
-                      <option value="">Выберите педагога</option>
-                      {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Месяц <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="month"
-                      value={quickInputData.month}
-                      onChange={(e) => setQuickInputData({...quickInputData, month: e.target.value})}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Всего занятий за месяц <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={quickInputData.totalSessions}
-                      onChange={(e) => setQuickInputData({...quickInputData, totalSessions: e.target.value})}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
-                      placeholder="Например: 8"
-                      min="1"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Всего посещений за месяц <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={quickInputData.totalVisits}
-                      onChange={(e) => setQuickInputData({...quickInputData, totalVisits: e.target.value})}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
-                      placeholder="Например: 208"
-                      min="1"
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Даты занятий (необязательно)
-                    </label>
-                    <input
-                      type="text"
-                      value={quickInputData.sessionDates}
-                      onChange={(e) => setQuickInputData({...quickInputData, sessionDates: e.target.value})}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-base"
-                      placeholder="04.11, 06.11, 11.11, 13.11..."
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Через запятую. Если не указано, распределится равномерно</p>
-                  </div>
-                </div>
-
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-                  <h4 className="font-semibold text-green-900 mb-2">📊 Предпросмотр расчета</h4>
-                  {quickInputData.totalVisits && quickInputData.totalSessions ? (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <p className="text-gray-600">Занятий:</p>
-                        <p className="font-bold text-lg">{quickInputData.totalSessions}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Посещений:</p>
-                        <p className="font-bold text-lg">{quickInputData.totalVisits}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Среднее на занятие:</p>
-                        <p className="font-bold text-lg">
-                          {Math.round(parseInt(quickInputData.totalVisits) / parseInt(quickInputData.totalSessions))} чел
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Доход от государства:</p>
-                        <p className="font-bold text-lg text-green-600">
-                          {(parseInt(quickInputData.totalVisits) * expenses.paymentRate).toLocaleString('ru-RU')} ₽
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-gray-600 text-sm">Заполните количество занятий и посещений для расчета</p>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => {
-                    console.log('Клик на кнопку');
-                    console.log('Данные:', quickInputData);
-                    addQuickReport();
-                  }}
-                  className="w-full bg-purple-600 text-white px-8 py-4 rounded-lg hover:bg-purple-700 active:bg-purple-800 flex items-center justify-center gap-2 transition font-medium text-lg"
-                >
-                  <Upload size={24} /> Добавить отчет
-                </button>
-
-                <div className="mt-8 bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-semibold mb-2">📋 Пример заполнения:</h4>
-                  <ul className="text-sm space-y-1 text-gray-700">
-                    <li>• <strong>Код группы:</strong> G-02250378</li>
-                    <li>• <strong>Педагог:</strong> Иванова А.П.</li>
-                    <li>• <strong>Месяц:</strong> 2025-11 (ноябрь 2025)</li>
-                    <li>• <strong>Всего занятий:</strong> 8</li>
-                    <li>• <strong>Всего посещений:</strong> 208</li>
-                    <li>• <strong>Даты:</strong> 04.11, 06.11, 11.11, 13.11, 18.11, 20.11, 25.11, 27.11</li>
-                  </ul>
+                  <div className="text-xs text-slate-400"> {fmt(currentTotal)}₽ → {fmt(goal)}₽</div>
                 </div>
               </div>
-            )}
 
-            {activeTab === 'input' && (
-              <div>
-                <h3 className="text-lg font-bold mb-4">Ручной ввод по датам</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Группа</label>
-                    <select
-                      value={formData.group}
-                      onChange={(e) => setFormData({...formData, group: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                    >
-                      <option value="">Выберите группу</option>
-                      {groups.map(g => <option key={g} value={g}>{g}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Дата</label>
-                    <input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => setFormData({...formData, date: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Педагог</label>
-                    <select
-                      value={formData.teacher}
-                      onChange={(e) => setFormData({...formData, teacher: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                    >
-                      <option value="">Выберите педагога</option>
-                      {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Человек</label>
-                    <input
-                      type="number"
-                      value={formData.count}
-                      onChange={(e) => setFormData({...formData, count: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                      placeholder="0"
-                      min="0"
-                    />
-                  </div>
-                </div>
-                <button
-                  onClick={addRecord}
-                  className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2 transition"
-                >
-                  <PlusCircle size={20} /> Добавить запись
-                </button>
+              <nav className="mt-4 flex flex-wrap gap-2">
+                {[
+                  {id:'monthlyReport', title:'Месячный отчёт'}, 
+                  {id:'dolgo', title:'Московское долголетие'},
+                  {id:'individuals', title:'Индивидуальные уроки'},
+                  {id:'rentals', title:'Аренда зала'},
+                  {id:'expenses', title:'Расходы'},
+                  {id:'passive', title:'Пассивный'},
+                  {id:'students', title:'База учеников'},
+                  {id:'analytics', title:'Аналитика'},
+                  {id:'archive', title:'По месяцам'},
+                  {id:'summary', title:'Сводка'},
+          {id:'teachersSalary', title:'Зарплаты педагогов'},
+                ].map(t=>(
+                  <button
+                    key={t.id}
+                    onClick={()=>setActiveTab(t.id)}
+                    className={`px-3 py-1 rounded ${activeTab===t.id ? 'bg-blue-600' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                  >{t.title}</button>
+                ))}
+              </nav>
+            </header>
 
-                <div className="mt-8">
-                  <h3 className="text-xl font-bold mb-4">Все записи</h3>
+            <main className="bg-slate-800 rounded p-4 border border-slate-700">
+              {activeTab === 'monthlyReport' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">📅 Месячный отчёт (сводка)</h2>
+                    <div className="flex gap-2">
+                      <button onClick={()=> setActiveTab('summary')} className="px-3 py-2 bg-slate-700 rounded">Перейти в сводку</button>
+                      <button onClick={exportCSV} className="px-3 py-2 bg-green-600 rounded">Экспорт CSV</button>
+                    </div>
+                  </div>
+
                   <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
+                    <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-purple-100">
-                          <th className="p-3 text-left">Дата</th>
-                          <th className="p-3 text-left">Группа</th>
-                          <th className="p-3 text-left">Педагог</th>
-                          <th className="p-3 text-left">Человек</th>
-                          <th className="p-3 text-center" style={{minWidth: '100px'}}>Действия</th>
+                        <tr className="text-left text-slate-300 border-b border-slate-700">
+                          <th className="py-2 px-2">Категория</th>
+                          <th className="py-2 px-2 text-right">Доход</th>
+                          <th className="py-2 px-2 text-right">Расход</th>
+                          <th className="py-2 px-2 text-right">Прибыль</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {records.length === 0 ? (
-                          <tr>
-                            <td colSpan="5" className="p-6 text-center text-gray-500">
-                              Нет записей. Используйте "Быстрый ввод" или добавьте вручную.
+                        {monthlyReport.map((r,i)=>(
+                          <tr key={i} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.category}</td>
+                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.income)}₽</td>
+                            <td className="py-2 px-2 text-right text-red-400">-{fmt(r.expense)}₽</td>
+                            <td className="py-2 px-2 text-right text-blue-400 font-semibold">{fmt(r.profit)}₽</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50">
+                        <tr className="font-bold">
+                          <td className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalReportIncome)}₽</td>
+                          <td className="py-2 px-2 text-right text-red-400">-{fmt(totalReportExpense)}₽</td>
+                          <td className="py-2 px-2 text-right text-blue-400">{fmt(totalReportProfit)}₽</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'dolgo' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">🏃 Московское долголетие</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('dolgo')}>Добавить запись</button>
+                  </div>
+
+                  <div className="overflow-x-auto mb-4">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-700 text-slate-300">
+                          <th className="py-2 px-2">Дата</th>
+                          <th className="py-2 px-2">Локация</th>
+                          <th className="py-2 px-2">Педагог</th>
+                          <th className="py-2 px-2 text-right">Ставка</th>
+                          <th className="py-2 px-2 text-right">Людей</th>
+                          <th className="py-2 px-2 text-right">Доход</th>
+                          <th className="py-2 px-2 text-right">Расход пед.</th>
+                          <th className="py-2 px-2 text-right">Расход за зал</th>
+                          <th className="py-2 px-2 text-right">Прибыль</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dolgo.map((r,idx)=>{
+                          const teacherExpense = calcTeacherExpense(Number(r.income||0), r.rate);
+                          const profit = Number(r.income||0) - teacherExpense - Number(r.hallExpense||0);
+                          return (
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.date}</td>
+                            <td className="py-2 px-2">{r.location}</td>
+                            <td className="py-2 px-2">{r.teacher}</td>
+                            <td className="py-2 px-2 text-right">{r.rate}</td>
+                            <td className="py-2 px-2 text-right">{r.people}</td>
+                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.income)}₽</td>
+                            <td className="py-2 px-2 text-right text-red-400">{fmt(teacherExpense)}₽</td>
+                            <td className="py-2 px-2 text-right">{fmt(r.hallExpense)}₽</td>
+                            <td className="py-2 px-2 text-right text-blue-400 font-bold">{fmt(profit)}₽</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('dolgo', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('dolgo', idx)} className="text-red-400">🗑</button>
                             </td>
                           </tr>
-                        ) : (
-                          records
-                            .sort((a, b) => new Date(b.date) - new Date(a.date))
-                            .map(record => (
-                              editingRecord?.id === record.id ? (
-                                <tr key={record.id} className="border-b bg-blue-50">
-                                  <td className="p-3">
-                                    <input
-                                      type="date"
-                                      value={editingRecord.date}
-                                      onChange={(e) => setEditingRecord({...editingRecord, date: e.target.value})}
-                                      className="p-2 border rounded w-full text-sm"
-                                    />
-                                  </td>
-                                  <td className="p-3">
-                                    <select
-                                      value={editingRecord.group}
-                                      onChange={(e) => setEditingRecord({...editingRecord, group: e.target.value})}
-                                      className="p-2 border rounded w-full text-sm"
-                                    >
-                                      {groups.map(g => <option key={g} value={g}>{g}</option>)}
-                                    </select>
-                                  </td>
-                                  <td className="p-3">
-                                    <select
-                                      value={editingRecord.teacher}
-                                      onChange={(e) => setEditingRecord({...editingRecord, teacher: e.target.value})}
-                                      className="p-2 border rounded w-full text-sm"
-                                    >
-                                      {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                                    </select>
-                                  </td>
-                                  <td className="p-3">
-                                    <input
-                                      type="number"
-                                      value={editingRecord.count}
-                                      onChange={(e) => setEditingRecord({...editingRecord, count: parseInt(e.target.value) || 0})}
-                                      className="p-2 border rounded w-20 text-sm"
-                                    />
-                                  </td>
-                                  <td className="p-3 text-center">
-                                    <button 
-                                      onClick={updateRecord} 
-                                      className="text-green-600 hover:text-green-800 mr-3 p-2 active:bg-green-100 rounded" 
-                                      title="Сохранить"
-                                    >
-                                      <Save size={20} />
-                                    </button>
-                                    <button 
-                                      onClick={() => setEditingRecord(null)} 
-                                      className="text-gray-600 hover:text-gray-800 p-2 active:bg-gray-100 rounded" 
-                                      title="Отмена"
-                                    >
-                                      <X size={20} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ) : (
-                                <tr key={record.id} className="border-b hover:bg-gray-50">
-                                  <td className="p-3">{new Date(record.date).toLocaleDateString('ru-RU')}</td>
-                                  <td className="p-3">{record.group}</td>
-                                  <td className="p-3">{record.teacher}</td>
-                                  <td className="p-3">{record.count}</td>
-                                  <td className="p-3 text-center">
-                                    <button 
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        setEditingRecord(record);
-                                      }} 
-                                      className="text-blue-600 hover:text-blue-800 mr-3 p-2 active:bg-blue-100 rounded inline-block cursor-pointer touch-manipulation relative z-10"
-                                      style={{WebkitTapHighlightColor: 'transparent'}}
-                                      title="Редактировать"
-                                    >
-                                      <Edit2 size={20} />
-                                    </button>
-                                    <button 
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        deleteRecord(record.id);
-                                      }} 
-                                      className="text-red-600 hover:text-red-800 p-2 active:bg-red-100 rounded inline-block cursor-pointer touch-manipulation relative z-10"
-                                      style={{WebkitTapHighlightColor: 'transparent'}}
-                                      title="Удалить"
-                                    >
-                                      <Trash2 size={20} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              )
-                            ))
-                        )}
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50 font-bold">
+                        <tr>
+                          <td colSpan="5" className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalDolgoIncome)}₽</td>
+                          <td className="py-2 px-2 text-right text-red-400">{fmt(totalDolgoTeacherExpense)}₽</td>
+                          <td className="py-2 px-2 text-right">{fmt(totalDolgoHallExpense)}₽</td>
+                          <td className="py-2 px-2 text-right text-blue-400">{fmt(totalDolgoProfit)}₽</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  <div className="text-sm text-slate-400">
+                    <div>Примечание: Доход = Людей × 280₽. Ставки педагога: 50% / 700 / 1000 / 100% — можно выбрать или ввести свое значение.</div>
+                    <div className="mt-2">Автозаполнение расхода за зал: Буденного → 0₽, Черкизовская → 0₽ (оплачивают педагоги), Парк → 0₽. Поле можно редактировать вручную.</div>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'individuals' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">👤 Индивидуальные уроки</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('individual')}>Добавить</button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-slate-300">
+                        <tr className="border-b border-slate-700">
+                          <th className="py-2 px-2">Дата</th>
+                          <th className="py-2 px-2">Тип</th>
+                          <th className="py-2 px-2">Клиент</th>
+                          <th className="py-2 px-2">Педагог</th>
+                          <th className="py-2 px-2 text-right">Сумма</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {individuals.map((r,idx)=>(
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.date}</td>
+                            <td className="py-2 px-2">{r.type}</td>
+                            <td className="py-2 px-2">{r.client}</td>
+                            <td className="py-2 px-2">{r.teacher || '—'}</td>
+                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.amount)}₽</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('individual', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('individual', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50 font-bold">
+                        <tr>
+                          <td colSpan="4" className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalIndividualIncome)}₽</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'rentals' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">🏠 Аренда зала</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('rental')}>Добавить аренду</button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-slate-300">
+                        <tr className="border-b border-slate-700">
+                          <th className="py-2 px-2">Дата</th>
+                          <th className="py-2 px-2">Имя</th>
+                          <th className="py-2 px-2 text-right">Сумма</th>
+                          <th className="py-2 px-2">Комментарий</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rentals.map((r,idx)=>(
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.date}</td>
+                            <td className="py-2 px-2">{r.name}</td>
+                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.amount)}₽</td>
+                            <td className="py-2 px-2 text-slate-400">{r.comment}</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('rental', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('rental', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50 font-bold">
+                        <tr>
+                          <td colSpan="2" className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalRentalsIncome)}₽</td>
+                          <td colSpan="2"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'expenses' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">💸 Расходы</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('expense')}>Добавить расход</button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-slate-300">
+                        <tr className="border-b border-slate-700">
+                          <th className="py-2 px-2">Дата</th>
+                          <th className="py-2 px-2">Тип</th>
+                          <th className="py-2 px-2">Что</th>
+                          <th className="py-2 px-2 text-right">Сумма</th>
+                          <th className="py-2 px-2">Комментарий</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expenses.map((r,idx)=>(
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.date}</td>
+                            <td className="py-2 px-2">{r.type}</td>
+                            <td className="py-2 px-2">{r.what}</td>
+                            <td className="py-2 px-2 text-right text-red-400">-{fmt(r.amount)}₽</td>
+                            <td className="py-2 px-2 text-slate-400">{r.comment}</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('expense', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('expense', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50 font-bold">
+                        <tr>
+                          <td colSpan="3" className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right text-red-400">-{fmt(totalExpenses)}₽</td>
+                          <td colSpan="2"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'passive' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">💰 Пассивный доход</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('passive')}>Добавить</button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-slate-300">
+                        <tr className="border-b border-slate-700">
+                          <th className="py-2 px-2">Дата</th>
+                          <th className="py-2 px-2">Источник</th>
+                          <th className="py-2 px-2 text-right">Сумма/мес</th>
+                          <th className="py-2 px-2">Комментарий</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {passive.map((r,idx)=>(
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.date}</td>
+                            <td className="py-2 px-2">{r.source}</td>
+                            <td className="py-2 px-2 text-right text-green-400">{fmt(r.monthly)}₽</td>
+                            <td className="py-2 px-2 text-slate-400">{r.comment}</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('passive', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('passive', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50 font-bold">
+                        <tr>
+                          <td colSpan="2" className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right text-green-400">{fmt(totalPassiveIncome)}₽</td>
+                          <td colSpan="2"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'students' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">👥 База учеников</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('student')}>Добавить ученика</button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div className="bg-slate-900 p-3 rounded">
+                      <div className="text-slate-400 text-sm">Всего учеников</div>
+                      <div className="text-2xl font-bold text-blue-400">{totalStudents}</div>
+                    </div>
+                    <div className="bg-slate-900 p-3 rounded">
+                      <div className="text-slate-400 text-sm">Активных</div>
+                      <div className="text-2xl font-bold text-green-400">{activeStudents}</div>
+                    </div>
+                    <div className="bg-slate-900 p-3 rounded">
+                      <div className="text-slate-400 text-sm">Средний доход</div>
+                      <div className="text-2xl font-bold text-yellow-400">{fmt(avgIncomePerStudent)}₽</div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-slate-300">
+                        <tr className="border-b border-slate-700">
+                          <th className="py-2 px-2">Имя</th>
+                          <th className="py-2 px-2">Телефон</th>
+                          <th className="py-2 px-2">Группа</th>
+                          <th className="py-2 px-2">Абонемент</th>
+                          <th className="py-2 px-2">Действует до</th>
+                          <th className="py-2 px-2">Статус</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {students.map((s,idx)=>(
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{s.name}</td>
+                            <td className="py-2 px-2">{s.phone}</td>
+                            <td className="py-2 px-2">{s.group}</td>
+                            <td className="py-2 px-2">{s.subscription}</td>
+                            <td className="py-2 px-2">{s.expiry}</td>
+                            <td className="py-2 px-2">{s.status}</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('student', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('student', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
-                </div>
-              </div>
-            )}
+                </section>
+              )}
 
-            {activeTab === 'reports' && (
-              <div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Месяц</label>
-                    <input
-                      type="month"
-                      value={selectedMonth}
-                      onChange={(e) => setSelectedMonth(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Педагог</label>
-                    <select
-                      value={filterTeacher}
-                      onChange={(e) => setFilterTeacher(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    >
-                      <option value="all">Все педагоги</option>
-                      {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Группа</label>
-                    <select
-                      value={filterGroup}
-                      onChange={(e) => setFilterGroup(e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    >
-                      <option value="all">Все группы</option>
-                      {groups.map(g => <option key={g} value={g}>{g}</option>)}
-                    </select>
-                  </div>
-                </div>
+              {activeTab === 'analytics' && (
+                <section>
+                  <h2 className="text-lg font-bold mb-4">📊 Аналитика</h2>
 
-                <button
-                  onClick={exportToCSV}
-                  className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 mb-6 transition"
-                >
-                  <FileDown size={20} /> Экспорт в CSV
-                </button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-slate-900 p-4 rounded">
+                      <h3 className="text-sm text-green-400 font-bold mb-2">Финансы</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between"><span>Текущий доход (месяц):</span><b>{fmt(totalReportIncome)}₽</b></div>
+                        <div className="flex justify-between"><span>Чистая прибыль:</span><b className="text-blue-400">{fmt(totalReportProfit)}₽</b></div>
+                        <div className="flex justify-between"><span>Рентабельность:</span><b>{ totalReportIncome ? Math.round((totalReportProfit/totalReportIncome)*100) : 0 }%</b></div>
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-lg shadow-lg">
-                    <p className="text-sm opacity-90 mb-1">Общий доход</p>
-                    <p className="text-3xl font-bold">{totals.totalIncome.toLocaleString('ru-RU')} ₽</p>
-                    <p className="text-xs opacity-75 mt-1">от государства</p>
-                  </div>
-                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-lg shadow-lg">
-                    <p className="text-sm opacity-90 mb-1">Зарплаты педагогов</p>
-                    <p className="text-3xl font-bold">{totals.totalSalaries.toLocaleString('ru-RU')} ₽</p>
-                    <p className="text-xs opacity-75 mt-1">по ставкам</p>
-                  </div>
-                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-6 rounded-lg shadow-lg">
-                    <p className="text-sm opacity-90 mb-1">Общие расходы</p>
-                    <p className="text-3xl font-bold">{totals.totalExpenses.toLocaleString('ru-RU')} ₽</p>
-                    <p className="text-xs opacity-75 mt-1">аренда + услуги</p>
-                  </div>
-                  <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-lg shadow-lg">
-                    <p className="text-sm opacity-90 mb-1">Прибыль компании</p>
-                    <p className="text-3xl font-bold">{totals.netProfit.toLocaleString('ru-RU')} ₽</p>
-                    <p className="text-xs opacity-75 mt-1">чистая</p>
-                  </div>
-                </div>
+                    <div className="bg-slate-900 p-4 rounded">
+                      <h3 className="text-sm text-blue-400 font-bold mb-2">Ученики</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between"><span>Всего учеников:</span><b>{totalStudents}</b></div>
+                        <div className="flex justify-between"><span>Активных:</span><b className="text-green-400">{activeStudents}</b></div>
+                        <div className="flex justify-between"><span>Средний доход с ученика:</span><b className="text-yellow-400">{fmt(avgIncomePerStudent)}₽</b></div>
+                      </div>
+                    </div>
 
-                <h3 className="text-xl font-bold mb-4">Детальный отчет по педагогам</h3>
-                <div className="space-y-6">
-                  {totals.stats.length === 0 ? (
-                    <p className="text-center text-gray-500 py-8">Нет данных за выбранный период</p>
-                  ) : (
-                    totals.stats.map((stat, idx) => (
-                      <div key={idx} className="bg-white border border-gray-200 rounded-lg p-6 shadow">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <h4 className="text-xl font-bold text-gray-800">{stat.name}</h4>
-                            <p className="text-sm text-gray-600">Ставка: {stat.rate}%</p>
+                    <div className="bg-slate-900 p-4 rounded">
+                      <h3 className="text-sm text-purple-400 font-bold mb-2">Цели</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between"><span>Текущий:</span><b>{fmt(currentTotal)}₽</b></div>
+                        <div className="flex justify-between"><span>Цель:</span><b>{fmt(goal)}₽</b></div>
+                        <div className="flex justify-between"><span>Осталось:</span><b className="text-red-400">{fmt(Math.max(goal - currentTotal,0))}₽</b></div>
+                        <div className="flex justify-between"><span>Прогресс:</span><b className="text-blue-400">{progressPercent}%</b></div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-900 p-4 rounded">
+                      <h3 className="text-sm text-orange-400 font-bold mb-2">Рост</h3>
+                      <div className="text-xs text-slate-400">
+                        • Нужно увеличить доход на ~{fmt(Math.round((goal - currentTotal)/12))}₽/мес<br/>
+                        • Или привлечь ~{Math.round((goal - currentTotal) / (avgIncomePerStudent || 3000))} учеников (примерно)
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <h3 className="text-md font-bold mb-2">🆕 ТОП педагогов/клубов (по прибыли)</h3>
+                    {topWithShare.length === 0 ? <div className="text-slate-400">Нет данных</div> : (
+                      <div className="bg-slate-900 p-3 rounded">
+                        {topWithShare.map((t, i)=>(
+                          <div key={i} className="flex items-center gap-3 mb-2">
+                            <div className="w-8 text-slate-300">{i+1}.</div>
+                            <div className="flex-1">
+                              <div className="font-semibold">{t.name}</div>
+                              <div className="text-xs text-slate-400">{fmt(t.profit)}₽ — {t.share}%</div>
+                              <div className="w-full bg-slate-700 h-2 rounded mt-1">
+                                <div style={{width:`${t.share}%`}} className="h-2 bg-gradient-to-r from-blue-500 to-green-400 rounded"></div>
+                              </div>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-2xl font-bold text-green-600">{stat.salary.toLocaleString('ru-RU')} ₽</p>
-                            <p className="text-sm text-gray-600">зарплата</p>
-                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-4 text-sm text-slate-400">Вывод: фокус на направлениях с наибольшей долей прибыли.</div>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'archive' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">📆 По месяцам (архив)</h2>
+                    <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>openModal('archive')}>Добавить месяц</button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-slate-300">
+                        <tr className="border-b border-slate-700">
+                          <th className="py-2 px-2">Месяц</th>
+                          <th className="py-2 px-2 text-right">Долголетие</th>
+                          <th className="py-2 px-2 text-right">Индивид.</th>
+                          <th className="py-2 px-2 text-right">Пассивный</th>
+                          <th className="py-2 px-2 text-right">Расходы</th>
+                          <th className="py-2 px-2 text-right">Прибыль</th>
+                          <th className="py-2 px-2 text-center">Действия</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlyArchive.map((r,idx)=>(
+                          <tr key={idx} className="border-b border-slate-700/40">
+                            <td className="py-2 px-2">{r.month} {r.year}</td>
+                            <td className="py-2 px-2 text-right">{fmt(r.groupIncome)}₽</td>
+                            <td className="py-2 px-2 text-right">{fmt(r.individualIncome)}₽</td>
+                            <td className="py-2 px-2 text-right">{fmt(r.passiveIncome)}₽</td>
+                            <td className="py-2 px-2 text-right">-{fmt(r.expenses)}₽</td>
+                            <td className="py-2 px-2 text-right text-blue-400 font-bold">{fmt(r.profit)}₽</td>
+                            <td className="py-2 px-2 text-center">
+                              <button onClick={()=>openModal('archive', idx)} className="text-blue-400 mr-2">✎</button>
+                              <button onClick={()=>deleteItem('archive', idx)} className="text-red-400">🗑</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-900/50 font-bold">
+                        <tr>
+                          <td className="py-2 px-2">ИТОГО:</td>
+                          <td className="py-2 px-2 text-right">{fmt(monthlyArchive.reduce((s,r)=>s+(r.groupIncome||0),0))}₽</td>
+                          <td className="py-2 px-2 text-right">{fmt(monthlyArchive.reduce((s,r)=>s+(r.individualIncome||0),0))}₽</td>
+                          <td className="py-2 px-2 text-right">{fmt(monthlyArchive.reduce((s,r)=>s+(r.passiveIncome||0),0))}₽</td>
+                          <td className="py-2 px-2 text-right">-{fmt(monthlyArchive.reduce((s,r)=>s+(r.expenses||0),0))}₽</td>
+                          <td className="py-2 px-2 text-right">{fmt(monthlyArchive.reduce((s,r)=>s+(r.profit||0),0))}₽</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {activeTab === 'summary' && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-bold">📈 Сводка (текущее состояние)</h2>
+                    <button onClick={exportCSV} className="px-3 py-2 bg-green-600 rounded">Экспорт CSV</button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-slate-900 p-4 rounded">
+                      <div className="flex justify-between"><span>Долголетие (прибыль):</span><b>{fmt(totalDolgoProfit)}₽</b></div>
+                      <div className="flex justify-between"><span>Индивидуалки:</span><b>{fmt(totalIndividualIncome)}₽</b></div>
+                      <div className="flex justify-between"><span>Аренда зала:</span><b>{fmt(totalRentalsIncome)}₽</b></div>
+                      <div className="flex justify-between"><span>Пассивный доход:</span><b>{fmt(totalPassiveIncome)}₽</b></div>
+                      <div className="flex justify-between mt-2"><span>Расходы:</span><b className="text-red-400">-{fmt(totalExpenses)}₽</b></div>
+                      <div className="flex justify-between mt-4 text-xl font-bold"><span>ЧИСТАЯ ПРИБЫЛЬ:</span><b className="text-blue-400">{fmt(totalReportProfit)}₽</b></div>
+                    </div>
+
+                    <div className="bg-slate-900 p-4 rounded">
+                      <div className="text-slate-400 text-sm mb-2">Краткая сводка</div>
+                      <div className="text-sm">Всего доходов: {fmt(totalReportIncome)}₽</div>
+                      <div className="text-sm">Всего расходов: {fmt(totalReportExpense)}₽</div>
+                      <div className="text-sm">Прибыль: {fmt(totalReportProfit)}₽</div>
+                      <div className="mt-4">
+                        <button className="px-3 py-2 bg-blue-600 rounded" onClick={()=>alert('Функция экспорта в разработке (CSV по сводке уже доступен)')}>Экспорт отчёта</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+{activeTab === 'teachersSalary' && (
+  <section>
+    <h2 className="text-lg font-bold mb-2">💼 Зарплаты педагогов</h2>
+    <div className="text-slate-400 mb-4">
+      Детальный отчёт по работе и вознаграждениям
+    </div>
+
+    {/* Статистика */}
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="bg-blue-900 p-4 rounded">
+        <div className="text-xs uppercase opacity-80">Педагогов работает</div>
+        <div className="text-2xl font-bold">3</div>
+      </div>
+      <div className="bg-green-800 p-4 rounded">
+        <div className="text-xs uppercase opacity-80">Всего занятий</div>
+        <div className="text-2xl font-bold">7</div>
+      </div>
+      <div className="bg-yellow-800 p-4 rounded">
+        <div className="text-xs uppercase opacity-80">Выплачено зарплат</div>
+        <div className="text-2xl font-bold">7 910₽</div>
+      </div>
+      <div className="bg-red-800 p-4 rounded">
+        <div className="text-xs uppercase opacity-80">Расходы на залы</div>
+        <div className="text-2xl font-bold">0₽</div>
+      </div>
+    </div>
+
+    {/* Таблица */}
+    <div className="overflow-x-auto bg-slate-900 p-4 rounded">
+      <table className="w-full text-sm">
+        <thead className="text-slate-300 border-b border-slate-700">
+          <tr>
+            <th>Педагог</th>
+            <th className="text-center">Дней</th>
+            <th className="text-center">Занятий</th>
+            <th className="text-right">Доход</th>
+            <th className="text-right">Зарплата</th>
+            <th className="text-right">Зал</th>
+            <th className="text-right">Прибыль</th>
+            <th className="text-center">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-b border-slate-700/40">
+            <td>
+              <b>Иванова Мария</b>
+              <div className="text-xs text-slate-400">📍 Буденного</div>
+            </td>
+            <td className="text-center">3</td>
+            <td className="text-center">3</td>
+            <td className="text-right text-green-400">13 720₽</td>
+            <td className="text-right text-yellow-400">6 860₽</td>
+            <td className="text-right text-red-400">0₽</td>
+            <td className="text-right text-blue-400 font-bold">6 860₽</td>
+            <td className="text-center">50%</td>
+          </tr>
+
+          <tr className="border-b border-slate-700/40">
+            <td>
+              <b>Сидорова Анна</b>
+              <div className="text-xs text-slate-400">📍 Черкизовская</div>
+            </td>
+            <td className="text-center">2</td>
+            <td className="text-center">2</td>
+            <td className="text-right text-green-400">11 760₽</td>
+            <td className="text-right text-yellow-400">2 000₽</td>
+            <td className="text-right text-red-400">0₽</td>
+            <td className="text-right text-blue-400 font-bold">9 760₽</td>
+            <td className="text-center">83%</td>
+          </tr>
+
+          <tr>
+            <td>
+              <b>Петров Сергей</b>
+              <div className="text-xs text-slate-400">📍 Парк</div>
+            </td>
+            <td className="text-center">2</td>
+            <td className="text-center">2</td>
+            <td className="text-right text-green-400">7 280₽</td>
+            <td className="text-right text-yellow-400">1 400₽</td>
+            <td className="text-right text-red-400">0₽</td>
+            <td className="text-right text-blue-400 font-bold">5 880₽</td>
+            <td className="text-center">81%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div className="mt-4 text-sm text-slate-400">
+      ⚠️ Сейчас показаны демонстрационные данные.  
+      В следующем шаге можно связать вкладку напрямую с «Московским долголетием».
+    </div>
+  </section>
+)}
+            </main>
+
+            {/* Modal */}
+            {showModal && (
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={closeModal}>
+                <div className="bg-slate-800 rounded p-4 w-full max-w-2xl" onClick={(e)=>e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-bold">{editingIndex!==null ? 'Редактировать' : 'Добавить'} — {modalType}</h3>
+                    <button onClick={closeModal} className="text-slate-400">✖</button>
+                  </div>
+
+                  <div className="space-y-2 max-h-[60vh] overflow-y-auto pb-2">
+                    {/* doloГo modal */}
+                    {modalType === 'dolgo' && (
+                      <>
+                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form, date:e.target.value})} placeholder="например: 06.12" /></div>
+
+                        <div>
+                          <label className="text-sm">Локация</label>
+                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.location||''} onChange={(e)=>{
+                            const loc = e.target.value;
+                            const defaultHall = locationDefaults[loc] ?? 0;
+                            setForm({...form, location: loc, hallExpense: defaultHall});
+                          }}>
+                            <option value="">Выберите локацию</option>
+                            <option value="Буденного">Буденного</option>
+                            <option value="Черкизовская">Черкизовская</option>
+                            <option value="Парк">Парк</option>
+                          </select>
                         </div>
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                          <div className="bg-blue-50 p-3 rounded">
-                            <p className="text-xs text-gray-600">Рабочих дней</p>
-                            <p className="text-2xl font-bold text-blue-700">{stat.workDays}</p>
+
+                        <div><label className="text-sm">Педагог</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.teacher||''} onChange={(e)=>setForm({...form, teacher:e.target.value})} /></div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-sm">Ставка педагога</label>
+                            <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.rate||'50%'} onChange={(e)=>setForm({...form, rate:e.target.value})}>
+                              <option value="50%">50%</option>
+                              <option value="700">700₽</option>
+                              <option value="1000">1000₽</option>
+                              <option value="100%">100%</option>
+                              <option value="custom">Другое...</option>
+                            </select>
+                            {form.rate === 'custom' && <input className="mt-2 w-full p-2 bg-slate-700 rounded" placeholder="Введите сумму или процент (пример: 800 или 40%)" value={form.customRate||''} onChange={(e)=>setForm({...form, customRate:e.target.value})} />}
                           </div>
-                          <div className="bg-purple-50 p-3 rounded">
-                            <p className="text-xs text-gray-600">Всего посещений</p>
-                            <p className="text-2xl font-bold text-purple-700">{stat.totalVisits}</p>
-                          </div>
-                          <div className="bg-green-50 p-3 rounded">
-                            <p className="text-xs text-gray-600">Доход от гос-ва</p>
-                            <p className="text-2xl font-bold text-green-700">{stat.income.toLocaleString('ru-RU')} ₽</p>
-                          </div>
-                          <div className="bg-orange-50 p-3 rounded">
-                            <p className="text-xs text-gray-600">Прибыль компании</p>
-                            <p className="text-2xl font-bold text-orange-700">{(stat.income - stat.salary).toLocaleString('ru-RU')} ₽</p>
+
+                          <div>
+                            <label className="text-sm">Количество людей</label>
+                            <input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.people||''} onChange={(e)=> {
+                              const people = e.target.value;
+                              const income = Number(people || 0) * 280;
+                              let rateVal = form.rate;
+                              if (rateVal === 'custom' && form.customRate) rateVal = form.customRate;
+                              setForm({...form, people, income});
+                            }} />
                           </div>
                         </div>
 
                         <div>
-                          <h5 className="font-semibold text-sm text-gray-700 mb-2">По группам:</h5>
-                          <div className="space-y-2">
-                            {Object.entries(stat.groupStats).map(([group, data]) => (
-                              <div key={group} className="flex justify-between items-center bg-gray-50 p-3 rounded">
-                                <span className="font-medium">{group}</span>
-                                <div className="text-right text-sm">
-                                  <span className="text-gray-600">{data.sessions} занятий • {data.visits} посещений</span>
-                                  <span className="ml-3 font-bold text-green-600">
-                                    {(data.visits * expenses.paymentRate).toLocaleString('ru-RU')} ₽
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                          <label className="text-sm">Расход за зал (₽)</label>
+                          <input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.hallExpense||0} onChange={(e)=>setForm({...form, hallExpense: Number(e.target.value)})} />
                         </div>
-                      </div>
-                    ))
-                  )}
+
+                        <div>
+                          <label className="text-sm">Комментарий</label>
+                          <input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form, comment:e.target.value})} />
+                        </div>
+                        <div className="text-sm text-slate-400">Доход автоматически = Людей × 280₽ (после заполнения людей появится сумма в предварительном расчёте).</div>
+                      </>
+                    )}
+
+                    {/* individual */}
+                    {modalType === 'individual' && (
+                      <>
+                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
+                        <div><label className="text-sm">Тип услуги</label>
+                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.type||'Остальные'} onChange={(e)=>setForm({...form,type:e.target.value})}>
+                            <option>Азбука танца</option>
+                            <option>Латинский квартет</option>
+                            <option>Проам</option>
+                            <option>Постановка</option>
+                            <option>Тренировка</option>
+                            <option>Остальные</option>
+                          </select>
+                        </div>
+                        <div><label className="text-sm">Имя клиента</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.client||''} onChange={(e)=>setForm({...form,client:e.target.value})} /></div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><label className="text-sm">Сумма (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.amount||''} onChange={(e)=>setForm({...form,amount: Number(e.target.value)})} /></div>
+                          <div><label className="text-sm">Педагог (опционально)</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.teacher||''} onChange={(e)=>setForm({...form,teacher:e.target.value})} /></div>
+                        </div>
+                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
+                      </>
+                    )}
+
+                    {/* rental */}
+                    {modalType === 'rental' && (
+                      <>
+                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
+                        <div><label className="text-sm">Имя (арендатор)</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.name||''} onChange={(e)=>setForm({...form,name:e.target.value})} /></div>
+                        <div><label className="text-sm">Сумма (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.amount||''} onChange={(e)=>setForm({...form,amount: Number(e.target.value)})} /></div>
+                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
+                      </>
+                    )}
+
+                    {/* expense */}
+                    {modalType === 'expense' && (
+                      <>
+                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
+                        <div><label className="text-sm">Тип расхода</label>
+                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.type||''} onChange={(e)=>setForm({...form,type:e.target.value})}>
+                            <option>Аренда зала</option>
+                            <option>Постоянные расходы</option>
+                            <option>Увлечения</option>
+                            <option>Прочее</option>
+                          </select>
+                        </div>
+                        <div><label className="text-sm">Что</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.what||''} onChange={(e)=>setForm({...form,what:e.target.value})} /></div>
+                        <div><label className="text-sm">Сумма (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.amount||''} onChange={(e)=>setForm({...form,amount: Number(e.target.value)})} /></div>
+                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
+                      </>
+                    )}
+
+                    {/* passive */}
+                    {modalType === 'passive' && (
+                      <>
+                        <div><label className="text-sm">Дата</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.date||''} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
+                        <div><label className="text-sm">Источник</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.source||''} onChange={(e)=>setForm({...form,source:e.target.value})} /></div>
+                        <div><label className="text-sm">Сумма в месяц (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.monthly||''} onChange={(e)=>setForm({...form,monthly: Number(e.target.value)})} /></div>
+                        <div><label className="text-sm">Комментарий</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.comment||''} onChange={(e)=>setForm({...form,comment:e.target.value})} /></div>
+                      </>
+                    )}
+
+                    {/* student */}
+                    {modalType === 'student' && (
+                      <>
+                        <div><label className="text-sm">Имя и фамилия</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.name||''} onChange={(e)=>setForm({...form,name:e.target.value})} /></div>
+                        <div><label className="text-sm">Телефон</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.phone||''} onChange={(e)=>setForm({...form,phone:e.target.value})} /></div>
+                        <div><label className="text-sm">Группа</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.group||''} onChange={(e)=>setForm({...form,group:e.target.value})} placeholder="Пример: Долголетие Буденного" /></div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><label className="text-sm">Абонемент</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.subscription||''} onChange={(e)=>setForm({...form,subscription:e.target.value})} /></div>
+                          <div><label className="text-sm">Действует до</label><input type="date" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.expiry||''} onChange={(e)=>setForm({...form,expiry:e.target.value})} /></div>
+                        </div>
+                        <div><label className="text-sm">Статус</label>
+                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.status||'Активный'} onChange={(e)=>setForm({...form,status:e.target.value})}>
+                            <option>Активный</option>
+                            <option>Неактивный</option>
+                            <option>Пробный</option>
+                          </select>
+                        </div>
+                        <div><label className="text-sm">Примечание</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.note||''} onChange={(e)=>setForm({...form,note:e.target.value})} /></div>
+                      </>
+                    )}
+
+                    {/* archive modal */}
+                    {modalType === 'archive' && (
+                      <>
+                        <div><label className="text-sm">Месяц</label>
+                          <select className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.month||''} onChange={(e)=>setForm({...form,month:e.target.value})}>
+                            <option>Январь</option><option>Февраль</option><option>Март</option><option>Апрель</option>
+                            <option>Май</option><option>Июнь</option><option>Июль</option><option>Август</option>
+                            <option>Сентябрь</option><option>Октябрь</option><option>Ноябрь</option><option>Декабрь</option>
+                          </select>
+                        </div>
+                        <div><label className="text-sm">Год</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.year||''} onChange={(e)=>setForm({...form,year:e.target.value})} /></div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><label className="text-sm">Долголетие (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.groupIncome||''} onChange={(e)=>setForm({...form,groupIncome: Number(e.target.value)})} /></div>
+                          <div><label className="text-sm">Индивидуальные (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.individualIncome||''} onChange={(e)=>setForm({...form,individualIncome: Number(e.target.value)})} /></div>
+                          <div><label className="text-sm">Пассивный (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.passiveIncome||''} onChange={(e)=>setForm({...form,passiveIncome: Number(e.target.value)})} /></div>
+                          <div><label className="text-sm">Расходы (₽)</label><input type="number" className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.expenses||''} onChange={(e)=>setForm({...form,expenses: Number(e.target.value)})} /></div>
+                        </div>
+                        <div><label className="text-sm">Примечание</label><input className="w-full mt-1 p-2 bg-slate-700 rounded" value={form.note||''} onChange={(e)=>setForm({...form,note:e.target.value})} /></div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={saveModal} className="px-4 py-2 bg-blue-600 rounded">Сохранить</button>
+                    <button onClick={closeModal} className="px-4 py-2 bg-slate-700 rounded">Отмена</button>
+                  </div>
                 </div>
               </div>
             )}
 
-            {activeTab === 'settings' && (
-              <div>
-                <div className="mb-8">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold">Педагоги</h3>
-                    <button
-                      onClick={addTeacher}
-                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 active:bg-purple-800 flex items-center gap-2 transition"
-                    >
-                      <PlusCircle size={18} /> Добавить
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    {teachers.map(t => (
-                      editingTeacher?.id === t.id ? (
-                        <div key={t.id} className="flex gap-2 items-center bg-blue-50 p-4 rounded-lg">
-                          <input
-                            type="text"
-                            value={editingTeacher.name}
-                            onChange={(e) => setEditingTeacher({...editingTeacher, name: e.target.value})}
-                            className="flex-1 p-3 border rounded text-base"
-                            placeholder="Имя"
-                          />
-                          <input
-                            type="number"
-                            value={editingTeacher.rate}
-                            onChange={(e) => setEditingTeacher({...editingTeacher, rate: parseInt(e.target.value) || 0})}
-                            className="w-24 p-3 border rounded text-base"
-                            placeholder="%"
-                          />
-                          <button 
-                            onClick={updateTeacher} 
-                            className="text-green-600 hover:text-green-800 active:bg-green-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center" 
-                            title="Сохранить"
-                          >
-                            <Save size={24} />
-                          </button>
-                          <button 
-                            onClick={() => setEditingTeacher(null)} 
-                            className="text-gray-600 hover:text-gray-800 active:bg-gray-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center" 
-                            title="Отмена"
-                          >
-                            <X size={24} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div key={t.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-lg hover:bg-gray-100">
-                          <div className="flex-1">
-                            <span className="font-medium text-base">{t.name}</span>
-                            <span className="text-gray-600 ml-4 text-sm">Ставка: {t.rate}%</span>
-                          </div>
-                          <div className="flex gap-2 relative z-10">
-                            <button 
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setEditingTeacher(t);
-                              }} 
-                              className="text-blue-600 hover:text-blue-800 active:bg-blue-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer touch-manipulation"
-                              style={{WebkitTapHighlightColor: 'transparent'}}
-                              title="Редактировать"
-                            >
-                              <Edit2 size={24} />
-                            </button>
-                            <button 
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                deleteTeacher(t.id);
-                              }} 
-                              className="text-red-600 hover:text-red-800 active:bg-red-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer touch-manipulation" 
-                              style={{WebkitTapHighlightColor: 'transparent'}}
-                              title="Удалить"
-                            >
-                              <Trash2 size={24} />
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mb-8">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold">Группы</h3>
-                    <button
-                      onClick={addGroup}
-                      className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 active:bg-purple-800 flex items-center gap-2 transition"
-                    >
-                      <PlusCircle size={18} /> Добавить
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    {groups.map(g => (
-                      <div key={g} className="flex justify-between items-center bg-gray-50 p-4 rounded-lg hover:bg-gray-100">
-                        <span className="font-medium text-base flex-1">{g}</span>
-                        <div className="flex gap-2 relative z-10">
-                          <button 
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              updateGroup(g);
-                            }} 
-                            className="text-blue-600 hover:text-blue-800 active:bg-blue-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer touch-manipulation"
-                            style={{WebkitTapHighlightColor: 'transparent'}}
-                            title="Редактировать"
-                          >
-                            <Edit2 size={24} />
-                          </button>
-                          <button 
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              deleteGroup(g);
-                            }} 
-                            className="text-red-600 hover:text-red-800 active:bg-red-100 p-3 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer touch-manipulation"
-                            style={{WebkitTapHighlightColor: 'transparent'}}
-                            title="Удалить"
-                          >
-                            <Trash2 size={24} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-xl font-bold mb-4">Расходы</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Аренда зала (₽)</label>
-                      <input
-                        type="number"
-                        value={expenses.rent}
-                        onChange={(e) => setExpenses({...expenses, rent: parseInt(e.target.value) || 0})}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Коммунальные услуги (₽)</label>
-                      <input
-                        type="number"
-                        value={expenses.utilities}
-                        onChange={(e) => setExpenses({...expenses, utilities: parseInt(e.target.value) || 0})}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Вода/кулер (₽)</label>
-                      <input
-                        type="number"
-                        value={expenses.water}
-                        onChange={(e) => setExpenses({...expenses, water: parseInt(e.target.value) || 0})}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Зарплата администратора (₽)</label>
-                      <input
-                        type="number"
-                        value={expenses.admin}
-                        onChange={(e) => setExpenses({...expenses, admin: parseInt(e.target.value) || 0})}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Ставка от государства (₽)</label>
-                      <input
-                        type="number"
-                        value={expenses.paymentRate}
-                        onChange={(e) => setExpenses({...expenses, paymentRate: parseInt(e.target.value) || 0})}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
-      </div>
-    </div>
-  );
-};
+      );
+    }
 
-export default DanceSchoolTracker;
-                                  
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
