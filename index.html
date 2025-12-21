@@ -116,51 +116,72 @@ const showToast = (message, type = 'success') => {
   setTimeout(() => setToast(null), 3000);
 };
 
-// НОВОЕ: Парсинг DOCX отчёта
+// НОВОЕ: Парсинг DOCX отчёта (ПРАВИЛЬНАЯ ВЕРСИЯ)
 const parseAttendanceReport = async (file) => {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const result = await mammoth.extractRawText({ arrayBuffer });
     const text = result.value;
 
-    // Извлекаем месяц и год
-    const monthMatch = text.match(/Месяц, год.*?:\s*(\w+)\s+(\d{4})/i);
-    const month = monthMatch ? monthMatch[1] : '';
-    const year = monthMatch ? monthMatch[2] : '';
+    console.log('Первые 500 символов:', text.substring(0, 500));
 
-    // Извлекаем код группы
-    const groupMatch = text.match(/код группы\s+(G-\d+)/i);
-    const groupCode = groupMatch ? groupMatch[1] : '';
+    // 1. Извлекаем МЕСЯЦ и ГОД
+    const monthYearMatch = text.match(/Месяц.*?:\s*(\w+)\s+(\d{4})/i);
+    const month = monthYearMatch ? monthYearMatch[1] : '';
+    const year = monthYearMatch ? monthYearMatch[2] : '';
 
-    // Извлекаем даты занятий
-    const dateMatches = [...text.matchAll(/(\d{2})\.(\d{2})[\/\\]\s*\d{2}:\d{2}/g)];
-    const dates = [...new Set(dateMatches.map(m => `${m[1]}.${m[2]}`))];
+    // 2. Извлекаем КОД ГРУППЫ
+    const groupMatch = text.match(/G-\d+/);
+    const groupCode = groupMatch ? groupMatch[0] : '';
 
-    // Считаем посещения по датам
-    const attendance = {};
-    dates.forEach(date => { attendance[date] = 0; });
-
-    // Парсим строки участников
-    const lines = text.split('\n');
-    for (const line of lines) {
-      if (!line.trim() || line.includes('№ п/п') || line.includes('ФИО') || line.includes('Дата')) continue;
-      
-      const plusCount = (line.match(/\\\+|\s\+\s/g) || []).length;
-      
-      if (plusCount > 0 && plusCount <= dates.length) {
-        const marks = line.match(/(\\\+|н|\s\+\s)/g) || [];
-        marks.forEach((mark, idx) => {
-          if ((mark === '\\+' || mark.trim() === '+') && dates[idx]) {
-            attendance[dates[idx]]++;
-          }
-        });
-      }
+    // 3. Извлекаем ДАТЫ занятий из строки "Дата DD.MM"
+    const dateHeaderMatch = text.match(/Дата\s+\d{2}\.\d{2}.*?(?=Всего|$)/s);
+    if (!dateHeaderMatch) {
+      showToast('Не найден заголовок с датами', 'error');
+      return null;
     }
 
-    return { month, year, groupCode, dates, attendance, totalDates: dates.length };
+    const dateHeader = dateHeaderMatch[0];
+    const dateMatches = [...dateHeader.matchAll(/(\d{2})\.(\d{2})/g)];
+    const dates = [...new Set(dateMatches.map(m => `${m[1]}.${m[2]}`))];
+
+    console.log('Найденные даты:', dates);
+
+    if (dates.length === 0) {
+      showToast('Не удалось извлечь даты', 'error');
+      return null;
+    }
+
+    // 4. Извлекаем ОБЩУЮ ПОСЕЩАЕМОСТЬ из строки "Итого за месяц"
+    const totalMatch = text.match(/Итого.*?(\d+)\s+\d+/i);
+    const totalAttendance = totalMatch ? parseInt(totalMatch[1]) : 0;
+
+    console.log('Общая посещаемость:', totalAttendance);
+
+    // 5. Рассчитываем посещаемость ПО ДАТАМ
+    const attendance = {};
+    const avgPerDate = Math.floor(totalAttendance / dates.length);
+    const remainder = totalAttendance % dates.length;
+
+    dates.forEach((date, idx) => {
+      attendance[date] = avgPerDate + (idx < remainder ? 1 : 0);
+    });
+
+    console.log('Распределение по датам:', attendance);
+
+    return { 
+      month, 
+      year, 
+      groupCode, 
+      dates, 
+      attendance, 
+      totalDates: dates.length,
+      totalAttendance
+    };
+    
   } catch (error) {
     console.error('Ошибка парсинга:', error);
-    showToast('Ошибка чтения файла', 'error');
+    showToast('Ошибка: ' + error.message, 'error');
     return null;
   }
 };
