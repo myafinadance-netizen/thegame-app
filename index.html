@@ -120,27 +120,21 @@ const parseAttendanceReport = async (file) => {
   try {
     const arrayBuffer = await file.arrayBuffer();
 
-    // 1️⃣ DOCX → HTML
     const result = await mammoth.convertToHtml({ arrayBuffer });
     const html = result.value;
-
-    console.log("HTML из DOCX:", html);
 
     const doc = new DOMParser().parseFromString(html, "text/html");
     const text = doc.body.textContent;
 
-    // 2️⃣ Месяц и год
     const monthMatch = text.match(
       /Месяц,\s*год[^:]*:\s*(\w+)\s+(\d{4})/i
     );
     const month = monthMatch ? monthMatch[1] : "";
     const year = monthMatch ? monthMatch[2] : "";
 
-    // 3️⃣ Код группы
     const groupMatch = text.match(/G-\d{8}/);
     const groupCode = groupMatch ? groupMatch[0] : "";
 
-    // 4️⃣ Таблица
     const table = doc.querySelector("table");
     if (!table) {
       showToast("❌ Таблица не найдена", "error");
@@ -148,8 +142,44 @@ const parseAttendanceReport = async (file) => {
     }
 
     const rows = [...table.querySelectorAll("tr")];
+    const headerCells = rows[0].querySelectorAll("td, th");
 
-    // 5️⃣
+    const dates = [];
+    headerCells.forEach(cell => {
+      const m = cell.textContent.match(/(\d{2}\.\d{2})/);
+      if (m) dates.push(m[1]);
+    });
+
+    const attendance = {};
+    dates.forEach(d => attendance[d] = 0);
+
+    for (let i = 1; i < rows.length; i++) {
+      const cells = [...rows[i].querySelectorAll("td")];
+      if (cells.some(td => td.textContent.includes("Итого"))) break;
+
+      dates.forEach((date, idx) => {
+        const cell = cells[3 + idx];
+        if (cell && cell.textContent.trim() === "+") {
+          attendance[date]++;
+        }
+      });
+    }
+
+    return {
+      month,
+      year,
+      groupCode,
+      dates,
+      attendance,
+      totalDates: dates.length
+    };
+
+  } catch (error) {
+    console.error("Ошибка:", error);
+    showToast("Ошибка обработки файла", "error");
+    return null;
+  }
+};
 
 // НОВОЕ: Обработка загрузки файла
 const handleFileUpload = async (e) => {
