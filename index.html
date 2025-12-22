@@ -119,69 +119,37 @@ const showToast = (message, type = 'success') => {
 const parseAttendanceReport = async (file) => {
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const result = await mammoth.extractRawText({ arrayBuffer });
-    const text = result.value;
 
-    console.log('=== ДИАГНОСТИКА ===');
-    console.log('Длина:', text.length);
-    console.log('Первые 500:', text.substring(0, 500));
+    // 1️⃣ DOCX → HTML
+    const result = await mammoth.convertToHtml({ arrayBuffer });
+    const html = result.value;
 
-    // 1. МЕСЯЦ и ГОД: "Месяц, год проведения занятия:Ноябрь 2025"
-    const monthMatch = text.match(/Месяц,\s*год[^:]*:\s*(\w+)\s+(\d{4})/i);
-    const month = monthMatch ? monthMatch[1] : '';
-    const year = monthMatch ? monthMatch[2] : '';
+    console.log("HTML из DOCX:", html);
 
-    // 2. КОД ГРУППЫ: "код группы G-02250378"
-    const groupMatch = text.match(/код\s+группы\s+(G-\d{8})/i);
-    const groupCode = groupMatch ? groupMatch[1] : '';
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const text = doc.body.textContent;
 
-    // 3. ДАТЫ: из заголовков "Дата 04.11\ 09:00"
-    const dateMatches = [...text.matchAll(/(\d{2})\.(\d{2})/g)];
-const dates = [...new Set(dateMatches.map(m => `${m[1]}.${m[2]}`))].slice(0, 8);
+    // 2️⃣ Месяц и год
+    const monthMatch = text.match(
+      /Месяц,\s*год[^:]*:\s*(\w+)\s+(\d{4})/i
+    );
+    const month = monthMatch ? monthMatch[1] : "";
+    const year = monthMatch ? monthMatch[2] : "";
 
-    // 4. СЧИТАЕМ ПОСЕЩАЕМОСТЬ ПО ДАТАМ
-    const attendance = {};
-    dates.forEach(date => { attendance[date] = 0; });
+    // 3️⃣ Код группы
+    const groupMatch = text.match(/G-\d{8}/);
+    const groupCode = groupMatch ? groupMatch[0] : "";
 
-    // Ищем все символы \+ в каждой строке таблицы
-    const lines = text.split('\n');
-    for (const line of lines) {
-      // Пропускаем заголовки
-      if (!line.trim() || line.includes('№ п/п') || line.includes('ФИО') || 
-          line.includes('Дата') || line.includes('Итого')) continue;
-      
-      // Находим все \+ в строке
-      const marks = [...line.matchAll(/\\+/g)];
-      
-      // Каждый \+ соответствует дате по порядку
-      marks.forEach((mark, idx) => {
-        if (dates[idx]) {
-          attendance[dates[idx]]++;
-        }
-      });
-    }
-
-    console.log('Результат:', { month, year, groupCode, dates, attendance });
-
-    if (dates.length === 0) {
-      showToast('❌ Не найдены даты занятий', 'error');
+    // 4️⃣ Таблица
+    const table = doc.querySelector("table");
+    if (!table) {
+      showToast("❌ Таблица не найдена", "error");
       return null;
     }
 
-    return { 
-      month, 
-      year, 
-      groupCode, 
-      dates, 
-      attendance, 
-      totalDates: dates.length
-    };
-  } catch (error) {
-    console.error('Ошибка:', error);
-    showToast('Ошибка: ' + error.message, 'error');
-    return null;
-  }
-};
+    const rows = [...table.querySelectorAll("tr")];
+
+    // 5️⃣
 
 // НОВОЕ: Обработка загрузки файла
 const handleFileUpload = async (e) => {
